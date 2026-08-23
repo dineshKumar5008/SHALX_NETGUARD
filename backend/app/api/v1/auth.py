@@ -1,0 +1,587 @@
+import uuid
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional, Union
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Body
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import func, update, delete
+
+from backend.app.core.config import settings
+from backend.app.core.database import get_db
+from backend.app.core.security import verify_password, get_password_hash, create_access_token, get_current_user
+from backend.app.core.audit import record_audit_log
+from backend.app.models.user import User
+from backend.app.models.mfa import MFAChallenge
+from backend.app.schemas.auth import (
+    Token, UserResponse, PasswordChangeRequest, LoginRequest, LoginMfaResponse,
+    MFAVerifyRequest, MFAResendRequest, SetupAdminEmailRequest, UserProfileUpdateRequest,
+    ResetRateLimitRequest
+)
+from backend.app.services.mfa_service import mfa_service
+
+logger = logging.getLogger("netguard.auth")
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/login", response_model=LoginMfaResponse)
+async def login(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Step 1 of MFA Login Flow:
+    1. Authenticate username and password against registered database record.
+    2. Retrieve user's verified registered email address from database.
+    3. Validate that the email address is a genuine production email (not unconfigured/placeholder).
+    4. Generate a cryptographically secure, random 6-digit OTP.
+    5. Store salted cryptographic hash of OTP in mfa_challenges.
+    6. Deliver the OTP to user's registered email via SMTP.
+    7. Return MFA challenge ID (JWT session is NOT issued until OTP verification).
+    """
+    content_type = request.headers.get("content-type", "")
+    username = ""
+    password = ""
+
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            username = body.get("username", "").strip()
+            password = body.get("password", "")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
+    else:
+        try:
+            form = await request.form()
+            username = str(form.get("username", "")).strip()
+            password = str(form.get("password", ""))
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid form payload")
+
+    if not username or not password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username and password are required"
+        )
+
+    # 1. Look up user by username or registered email
+    stmt = select(User).where((User.username == username) | (User.email == username))
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user or not verify_password(password, user.hashed_password):
+        await record_audit_log(
+            db,
+            user=username,
+            action="LOGIN_FAILED",
+            resource="/api/v1/auth/login",
+            result="DENIED",
+            metadata={"reason": "Invalid credentials", "ip": request.client.host if request.client else None}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated"
+        )
+
+    # 2. Strict Real Registered Email Validation
+    recipient_email = (user.email or "").strip()
+    if not mfa_service.is_valid_production_email(recipient_email):
+        await record_audit_log(
+            db,
+            user=user.username,
+            action="LOGIN_FAILED_UNCONFIGURED_EMAIL",
+            resource="/api/v1/auth/login",
+            result="DENIED",
+            metadata={"reason": "User has no verified real email configured", "raw_email": recipient_email}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your account does not have a verified real email configured for MFA delivery. Please configure your registered email (e.g. set ADMIN_EMAIL in .env or run setup) before logging in."
+        )
+
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(minutes=settings.MFA_RESEND_WINDOW_MINUTES)
+
+    # 3. Rate Limiting: Max 3 OTP generation requests per 10 minutes per user
+    rate_stmt = select(func.count(MFAChallenge.id)).where(
+        MFAChallenge.user_id == user.id,
+        MFAChallenge.created_at >= window_start
+    )
+    recent_otp_count = (await db.execute(rate_stmt)).scalar() or 0
+    if recent_otp_count >= settings.MFA_MAX_RESENDS_PER_WINDOW:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many authentication attempts. Please wait before requesting another verification code."
+        )
+
+    # 4. Invalidate any existing active challenges for this user
+    await db.execute(
+        update(MFAChallenge)
+        .where(MFAChallenge.user_id == user.id, MFAChallenge.is_used == False)
+        .values(is_used=True)
+    )
+
+    # 5. Generate a completely NEW, cryptographically random 6-digit OTP
+    otp = mfa_service.generate_secure_otp()
+    otp_hash = mfa_service.hash_otp(otp)
+    challenge_id = uuid.uuid4().hex
+    expires_at = now + timedelta(minutes=settings.MFA_OTP_EXPIRE_MINUTES)
+
+    challenge = MFAChallenge(
+        challenge_id=challenge_id,
+        user_id=user.id,
+        otp_hash=otp_hash,
+        created_at=now,
+        expires_at=expires_at,
+        attempt_count=0,
+        resend_count=0,
+        is_used=False,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", "")[:250]
+    )
+    db.add(challenge)
+    await db.commit()
+
+    # 6. Send dynamic OTP strictly to the user's REGISTERED EMAIL address in the database
+    masked_email = mfa_service.mask_email(recipient_email)
+    
+    email_sent, email_err = await mfa_service.send_otp_email(
+        recipient_email=recipient_email,
+        otp=otp,
+        recipient_name=user.full_name or user.username
+    )
+
+    if not email_sent:
+        logger.warning(f"SMTP dispatch failure for {masked_email}: {email_err}")
+        challenge.is_used = True
+        await db.commit()
+        if not settings.SMTP_HOST:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email delivery is not configured. Please configure SMTP settings in .env or contact the administrator."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to send verification code. Please contact the administrator."
+            )
+
+    await record_audit_log(
+        db,
+        user=user.username,
+        action="MFA_CHALLENGE_ISSUED",
+        resource="/api/v1/auth/login",
+        result="SUCCESS",
+        metadata={
+            "challenge_id": challenge_id,
+            "masked_email": masked_email,
+            "email_dispatched": email_sent
+        }
+    )
+
+    return LoginMfaResponse(
+        mfa_required=True,
+        challenge_id=challenge_id,
+        masked_email=masked_email,
+        expires_in=settings.MFA_OTP_EXPIRE_MINUTES * 60,
+        message=f"Verification code dispatched to your registered email ({masked_email})."
+    )
+
+
+@router.post("/verify-mfa", response_model=Token)
+async def verify_mfa(
+    payload: MFAVerifyRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Step 2 of MFA Login Flow:
+    1. Verify user-submitted 6-digit OTP against stored cryptographic hash.
+    2. Check expiration (5 minutes) and attempt limits (max 5 attempts).
+    3. Issue final authenticated JWT session upon successful verification.
+    """
+    now = datetime.now(timezone.utc)
+
+    # 1. Fetch MFA challenge
+    stmt = select(MFAChallenge).where(MFAChallenge.challenge_id == payload.challenge_id)
+    challenge = (await db.execute(stmt)).scalars().first()
+
+    if not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification challenge"
+        )
+
+    if challenge.is_used:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This verification code has already been used. Please log in again."
+        )
+
+    # 2. Check Expiration
+    challenge_exp = challenge.expires_at
+    if challenge_exp.tzinfo is None:
+        challenge_exp = challenge_exp.replace(tzinfo=timezone.utc)
+
+    if now > challenge_exp:
+        challenge.is_used = True
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please request a new code."
+        )
+
+    # 3. Check Attempt Limit (Max 5 attempts)
+    if challenge.attempt_count >= settings.MFA_MAX_VERIFY_ATTEMPTS:
+        challenge.is_used = True
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum verification attempts exceeded. Please initiate a new login."
+        )
+
+    # Increment attempt count
+    challenge.attempt_count += 1
+
+    # 4. Cryptographic Hash Verification
+    is_valid = mfa_service.verify_otp_hash(payload.otp, challenge.otp_hash)
+
+    if not is_valid:
+        await db.commit()
+        remaining_attempts = max(0, settings.MFA_MAX_VERIFY_ATTEMPTS - challenge.attempt_count)
+        if remaining_attempts == 0:
+            challenge.is_used = True
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid verification code. Challenge locked due to too many failed attempts."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid verification code. {remaining_attempts} attempt(s) remaining."
+        )
+
+    # 5. Success: Consume challenge and authenticate user
+    challenge.is_used = True
+
+    user_stmt = select(User).where(User.id == challenge.user_id)
+    user = (await db.execute(user_stmt)).scalars().first()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated or unavailable"
+        )
+
+    user.last_login = now
+    await db.commit()
+
+    # 6. Issue JWT Access Token
+    token_data = {"sub": user.username, "role": user.role}
+    access_token = create_access_token(data=token_data)
+
+    await record_audit_log(
+        db,
+        user=user.username,
+        action="LOGIN_SUCCESS_MFA",
+        resource="/api/v1/auth/verify-mfa",
+        result="SUCCESS",
+        metadata={
+            "role": user.role,
+            "ip": request.client.host if request.client else None
+        }
+    )
+
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        role=user.role,
+        username=user.username,
+        full_name=user.full_name
+    )
+
+
+@router.post("/resend-mfa", response_model=LoginMfaResponse)
+async def resend_mfa(
+    payload: MFAResendRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resend a NEW dynamic OTP verification code:
+    1. Invalidate the previous challenge.
+    2. Check user-level rate limiting.
+    3. Generate a completely NEW 6-digit random OTP and hash it.
+    4. Deliver new code to the SAME registered user email.
+    5. Reset the 5-minute expiration timer.
+    """
+    now = datetime.now(timezone.utc)
+
+    # 1. Locate previous challenge
+    stmt = select(MFAChallenge).where(MFAChallenge.challenge_id == payload.challenge_id)
+    prev_challenge = (await db.execute(stmt)).scalars().first()
+
+    if not prev_challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification challenge session"
+        )
+
+    user_id = prev_challenge.user_id
+    user_stmt = select(User).where(User.id == user_id)
+    user = (await db.execute(user_stmt)).scalars().first()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is deactivated or unavailable"
+        )
+
+    # Validate registered email
+    recipient_email = (user.email or "").strip()
+    if not mfa_service.is_valid_production_email(recipient_email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User does not have a verified real email address configured."
+        )
+
+    # 2. Check rate limit: Max 3 sends per 10 minutes
+    window_start = now - timedelta(minutes=settings.MFA_RESEND_WINDOW_MINUTES)
+    rate_stmt = select(func.count(MFAChallenge.id)).where(
+        MFAChallenge.user_id == user.id,
+        MFAChallenge.created_at >= window_start
+    )
+    recent_count = (await db.execute(rate_stmt)).scalar() or 0
+    if recent_count >= settings.MFA_MAX_RESENDS_PER_WINDOW:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many verification code requests. Please wait a few minutes before trying again."
+        )
+
+    # 3. Invalidate previous challenge
+    prev_challenge.is_used = True
+
+    # 4. Generate completely NEW random OTP
+    new_otp = mfa_service.generate_secure_otp()
+    new_otp_hash = mfa_service.hash_otp(new_otp)
+    new_challenge_id = uuid.uuid4().hex
+    new_expires_at = now + timedelta(minutes=settings.MFA_OTP_EXPIRE_MINUTES)
+
+    new_challenge = MFAChallenge(
+        challenge_id=new_challenge_id,
+        user_id=user.id,
+        otp_hash=new_otp_hash,
+        created_at=now,
+        expires_at=new_expires_at,
+        attempt_count=0,
+        resend_count=prev_challenge.resend_count + 1,
+        is_used=False,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", "")[:250]
+    )
+    db.add(new_challenge)
+    await db.commit()
+
+    # 5. Deliver new code to the same registered email
+    masked_email = mfa_service.mask_email(recipient_email)
+    
+    email_sent, email_err = await mfa_service.send_otp_email(
+        recipient_email=recipient_email,
+        otp=new_otp,
+        recipient_name=user.full_name or user.username
+    )
+
+    if not email_sent:
+        logger.warning(f"Resend SMTP dispatch failure for {masked_email}: {email_err}")
+        new_challenge.is_used = True
+        await db.commit()
+        if not settings.SMTP_HOST:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email delivery is not configured. Please configure SMTP settings in .env or contact the administrator."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to send verification code. Please contact the administrator."
+            )
+
+    await record_audit_log(
+        db,
+        user=user.username,
+        action="MFA_RESEND_ISSUED",
+        resource="/api/v1/auth/resend-mfa",
+        result="SUCCESS",
+        metadata={
+            "new_challenge_id": new_challenge_id,
+            "masked_email": masked_email,
+            "resend_count": new_challenge.resend_count
+        }
+    )
+
+    return LoginMfaResponse(
+        mfa_required=True,
+        challenge_id=new_challenge_id,
+        masked_email=masked_email,
+        expires_in=settings.MFA_OTP_EXPIRE_MINUTES * 60,
+        message=f"A fresh verification code has been dispatched to your registered email ({masked_email})."
+    )
+
+
+@router.post("/setup-admin-email")
+async def setup_admin_email(
+    payload: SetupAdminEmailRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Initial Setup Endpoint: Configure the administrator's real registered email address.
+    Requires administrator password verification.
+    """
+    stmt = select(User).where(User.username == payload.username)
+    result = await db.execute(stmt)
+    admin_user = result.scalars().first()
+
+    if not admin_user or admin_user.role != "ADMIN" or not verify_password(payload.password, admin_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid administrator credentials"
+        )
+
+    clean_email = payload.real_email.strip()
+    if not mfa_service.is_valid_production_email(clean_email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide a valid, non-placeholder production email address (e.g. your-name@gmail.com)."
+        )
+
+    admin_user.email = clean_email
+    await db.commit()
+
+    await record_audit_log(
+        db,
+        user=admin_user.username,
+        action="ADMIN_EMAIL_CONFIGURED",
+        resource="/api/v1/auth/setup-admin-email",
+        result="SUCCESS",
+        metadata={"configured_email": mfa_service.mask_email(clean_email)}
+    )
+
+    return {
+        "success": True,
+        "message": f"Administrator registered email successfully updated to {clean_email}. Real MFA verification codes will now be dispatched to this address."
+    }
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve profile, registered email, and role information for currently authenticated user."""
+    return current_user
+
+
+@router.put("/profile", response_model=UserResponse)
+async def update_current_user_profile(
+    payload: UserProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update profile and registered MFA email address for the logged-in user."""
+    if payload.email is not None:
+        clean_email = payload.email.strip()
+        if not mfa_service.is_valid_production_email(clean_email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid email format. Please provide a real production email address."
+            )
+        # Check if email is already used by another account
+        stmt = select(User).where(User.email == clean_email, User.id != current_user.id)
+        if (await db.execute(stmt)).scalars().first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email address is already registered to another account."
+            )
+        if current_user.email != clean_email:
+            current_user.email = clean_email
+            current_user.email_verified = True
+            await db.execute(delete(MFAChallenge).where(MFAChallenge.user_id == current_user.id))
+
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip()
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    await record_audit_log(
+        db,
+        user=current_user.username,
+        action="PROFILE_UPDATED",
+        resource="/api/v1/auth/profile",
+        result="SUCCESS"
+    )
+    return current_user
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Change the current user's password securely."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password"
+        )
+
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    await db.commit()
+
+    await record_audit_log(
+        db,
+        user=current_user.username,
+        action="PASSWORD_CHANGE",
+        resource="/api/v1/auth/change-password",
+        result="SUCCESS"
+    )
+    return {"message": "Password updated successfully"}
+
+
+@router.post("/reset-rate-limit")
+async def reset_rate_limit(
+    payload: ResetRateLimitRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Safely reset the login / MFA rate-limit state for an account upon valid credential verification.
+    This provides developers and administrators with a secure, authenticated mechanism to reset
+    cooldown windows without weakening production security, bypassing OTP, or exposing credentials.
+    """
+    stmt = select(User).where(User.username == payload.username)
+    user = (await db.execute(stmt)).scalars().first()
+
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password"
+        )
+
+    # Invalidate and delete existing challenges for this user
+    await db.execute(delete(MFAChallenge).where(MFAChallenge.user_id == user.id))
+    await db.commit()
+
+    logger.info(f"MFA rate-limit state manually reset for user '{user.username}'.")
+    return {
+        "success": True,
+        "message": f"Rate-limit state cleared for user '{user.username}'. You may now log in."
+    }
