@@ -1,6 +1,6 @@
 services:
   # ----------------------------------------------------------------------------
-  # SHALX NETGUARD — Backend API Web Service
+  # SHALX NETGUARD — Backend API Web Service (Free Tier)
   # ----------------------------------------------------------------------------
   - type: web
     name: netguard-backend
@@ -45,12 +45,11 @@ services:
 
   # ----------------------------------------------------------------------------
   # SHALX NETGUARD — Frontend Static Site
-  # Note: Static sites are distributed globally on Render CDN (no region property)
+  # Note: Static sites do not specify a plan or region on Render.
   # ----------------------------------------------------------------------------
   - type: web
     name: netguard-frontend
     env: static
-    plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     routes:
@@ -66,7 +65,7 @@ services:
 
 databases:
   # ----------------------------------------------------------------------------
-  # SHALX NETGUARD — Managed PostgreSQL Database
+  # SHALX NETGUARD — Managed PostgreSQL Database (Free Tier)
   # ----------------------------------------------------------------------------
   - name: netguard-postgres
     plan: free
