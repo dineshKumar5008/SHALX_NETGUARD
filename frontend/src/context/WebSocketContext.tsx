@@ -20,14 +20,23 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let reconnectTimeout: any;
 
     const getWebSocketUrl = (): string => {
-      if (import.meta.env.VITE_WS_URL) {
-        return `${String(import.meta.env.VITE_WS_URL).trim().replace(/\/$/, '')}/ws/soc`;
+      let rawWs = import.meta.env.VITE_WS_URL ? String(import.meta.env.VITE_WS_URL).trim().replace(/\/$/, '') : '';
+      if (rawWs) {
+        if (!rawWs.startsWith('ws://') && !rawWs.startsWith('wss://')) {
+          rawWs = `wss://${rawWs}`;
+        }
+        return `${rawWs}/ws/soc`;
       }
-      if (import.meta.env.VITE_API_URL) {
-        const apiUrl = String(import.meta.env.VITE_API_URL).trim().replace(/\/$/, '');
-        const wsBase = apiUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+
+      let rawApi = import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL).trim().replace(/\/$/, '') : '';
+      if (rawApi) {
+        if (!rawApi.startsWith('http://') && !rawApi.startsWith('https://')) {
+          rawApi = `https://${rawApi}`;
+        }
+        const wsBase = rawApi.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
         return `${wsBase}/ws/soc`;
       }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${protocol}//${window.location.host}/ws/soc`;
     };

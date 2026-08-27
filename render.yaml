@@ -23,7 +23,7 @@ services:
         fromService:
           type: web
           name: netguard-frontend
-          property: url
+          property: host
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -40,14 +40,16 @@ services:
         value: "true"
       - key: SMTP_USE_SSL
         value: "false"
+      - key: ADMIN_EMAIL
+        sync: false
 
   # ----------------------------------------------------------------------------
-  # SHALX NETGUARD — Frontend Web Service
+  # SHALX NETGUARD — Frontend Static Site
+  # Note: Static sites are distributed globally on Render CDN (no region property)
   # ----------------------------------------------------------------------------
   - type: web
     name: netguard-frontend
     env: static
-    region: oregon
     plan: standard
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
@@ -60,7 +62,7 @@ services:
         fromService:
           type: web
           name: netguard-backend
-          property: url
+          property: host
 
 databases:
   # ----------------------------------------------------------------------------
