@@ -35,7 +35,9 @@ export interface AuthContextType {
   resendMfa: (challengeId: string) => Promise<ResendMfaResponse>;
   logout: () => void;
   isAdmin: boolean;
+  isSeniorAnalyst: boolean;
   isAnalyst: boolean;
+  canReviewRegistrations: boolean;
   hasRole: (roles: UserRole[]) => boolean;
 }
 
@@ -156,7 +158,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const isAdmin = user?.role === 'ADMIN';
-  const isAnalyst = user?.role === 'ANALYST' || user?.role === 'ADMIN';
+  const isSeniorAnalyst = user?.role === 'SENIOR_ANALYST';
+  const isAnalyst = user?.role === 'ANALYST' || user?.role === 'SENIOR_ANALYST' || user?.role === 'ADMIN';
+  const canReviewRegistrations = user?.role === 'ADMIN' || user?.role === 'SENIOR_ANALYST';
 
   const hasRole = (roles: UserRole[]): boolean => {
     if (!user) return false;
@@ -175,7 +179,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resendMfa,
         logout,
         isAdmin,
+        isSeniorAnalyst,
         isAnalyst,
+        canReviewRegistrations,
         hasRole,
       }}
     >

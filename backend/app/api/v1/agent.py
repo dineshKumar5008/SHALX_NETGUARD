@@ -8,7 +8,10 @@ from backend.app.core.database import get_db
 from backend.app.core.security import verify_agent_token
 from backend.app.models.metrics import HealthMetric, AgentHeartbeat
 from backend.app.models.device import Device
-from backend.app.schemas.metrics import HealthMetricCreate, HealthMetricResponse, AgentHeartbeatCreate, AgentHeartbeatResponse
+from backend.app.schemas.metrics import (
+    HealthMetricCreate, HealthMetricResponse, AgentHeartbeatCreate,
+    AgentHeartbeatResponse, DiscoverySyncPayload
+)
 from backend.app.websocket.manager import ws_manager
 
 router = APIRouter(prefix="/agent", tags=["Monitoring Agent Telemetry Ingestion"])
@@ -125,3 +128,60 @@ async def ingest_host_metrics(
     })
 
     return metric
+
+
+@router.post("/discovery-sync")
+async def sync_remote_network_discovery(
+    payload: DiscoverySyncPayload,
+    db: AsyncSession = Depends(get_db),
+    authorized: bool = Depends(verify_agent_token)
+):
+    """
+    Ingest verified physical LAN discovery evidence from an authorized remote network sensor.
+    Updates the central device inventory using real evidence (ARP, ports, OS detection) without synthetic data.
+    """
+    from backend.app.collectors.discovery import discovery_service
+    now = datetime.now(timezone.utc)
+    synced_count = 0
+
+    for node in payload.devices:
+        clean_ip = node.ip_address.strip()
+        if not clean_ip or clean_ip.startswith("169.254."):
+            continue
+
+        dev_data = {
+            "ip_address": clean_ip,
+            "mac_address": node.mac_address,
+            "hostname": node.hostname,
+            "vendor": node.vendor,
+            "os_type": node.os_type or "Unknown",
+            "os_version": node.os_version,
+            "os_confidence": node.os_confidence or "Low",
+            "device_type": node.device_type or "Unknown",
+            "device_type_confidence": node.device_type_confidence or "Low",
+            "architecture": node.architecture,
+            "open_ports": node.open_ports or [],
+            "detected_services": node.detected_services or [],
+            "interface_name": node.interface_name or "sensor0",
+            "is_gateway": node.is_gateway,
+            "is_local_host": node.is_local_host,
+        }
+        await discovery_service._upsert_device(db, dev_data, now)
+        synced_count += 1
+
+    await db.commit()
+
+    # Broadcast real-time topology and device update
+    await ws_manager.broadcast("devices_updated", {
+        "sensor_id": payload.sensor_id,
+        "synced_count": synced_count,
+        "timestamp": now.isoformat()
+    })
+
+    return {
+        "status": "SUCCESS",
+        "synced_devices_count": synced_count,
+        "sensor_id": payload.sensor_id,
+        "timestamp": now.isoformat()
+    }
+

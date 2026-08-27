@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
@@ -24,7 +25,7 @@ interface NavItem {
   name: string;
   path: string;
   icon: React.ReactNode;
-  adminOnly?: boolean;
+  reviewerOnly?: boolean;
 }
 
 interface NavSection {
@@ -33,7 +34,23 @@ interface NavSection {
 }
 
 export const Sidebar: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canReviewRegistrations } = useAuth();
+  const [pendingCount, setPendingCount] = React.useState<number>(0);
+
+  React.useEffect(() => {
+    if (!canReviewRegistrations) return;
+    const fetchPending = async () => {
+      try {
+        const res = await apiClient.get('/users/registration-requests/count');
+        setPendingCount(res.data?.pending_count || 0);
+      } catch (err) {
+        // Silently ignore
+      }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 15000);
+    return () => clearInterval(interval);
+  }, [canReviewRegistrations]);
 
   const sections: NavSection[] = [
     {
@@ -77,7 +94,7 @@ export const Sidebar: React.FC = () => {
     {
       title: 'System',
       items: [
-        { name: 'User Management', path: '/users', icon: <Users size={17} />, adminOnly: true },
+        { name: 'User Management', path: '/users', icon: <Users size={17} />, reviewerOnly: true },
         { name: 'Settings', path: '/settings', icon: <Sliders size={17} /> },
         { name: 'About SOC', path: '/about', icon: <Info size={17} /> },
       ],
@@ -88,7 +105,7 @@ export const Sidebar: React.FC = () => {
     <aside className="w-64 bg-[#0a0d14] border-r border-[#1e293b] flex flex-col h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto z-20">
       <nav className="p-4 space-y-6 flex-1">
         {sections.map((section, sIdx) => {
-          const visibleItems = section.items.filter((item) => !item.adminOnly || isAdmin);
+          const visibleItems = section.items.filter((item) => !item.reviewerOnly || canReviewRegistrations);
           if (visibleItems.length === 0) return null;
 
           return (
@@ -103,15 +120,22 @@ export const Sidebar: React.FC = () => {
                     to={item.path}
                     end={item.path === '/'}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      `flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                         isActive
                           ? 'bg-cyan-950/60 text-cyan-400 border border-cyan-800/60 font-semibold shadow-sm'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80 border border-transparent'
                       }`
                     }
                   >
-                    <span className="shrink-0">{item.icon}</span>
-                    <span className="truncate font-mono">{item.name}</span>
+                    <div className="flex items-center gap-3 truncate">
+                      <span className="shrink-0">{item.icon}</span>
+                      <span className="truncate font-mono">{item.name}</span>
+                    </div>
+                    {item.path === '/users' && pendingCount > 0 && (
+                      <span className="px-1.5 py-0.2 bg-amber-500 text-black text-[9px] font-mono font-bold rounded-full animate-pulse">
+                        {pendingCount}
+                      </span>
+                    )}
                   </NavLink>
                 ))}
               </div>

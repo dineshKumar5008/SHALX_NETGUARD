@@ -7,11 +7,12 @@ import {
 import apiClient from '../../api/client';
 
 export const Navbar: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, canReviewRegistrations } = useAuth();
   const { isConnected } = useWebSocket();
   const [time, setTime] = useState<string>('');
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [quickMessage, setQuickMessage] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState<number>(0);
 
   useEffect(() => {
     const updateClock = () => {
@@ -22,6 +23,21 @@ export const Navbar: React.FC = () => {
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!canReviewRegistrations) return;
+    const fetchPending = async () => {
+      try {
+        const res = await apiClient.get('/users/registration-requests/count');
+        setPendingCount(res.data?.pending_count || 0);
+      } catch (err) {
+        // Silently ignore
+      }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 15000);
+    return () => clearInterval(interval);
+  }, [canReviewRegistrations]);
 
   const triggerSimulatedAttack = async () => {
     setIsSimulating(true);
@@ -104,6 +120,26 @@ export const Navbar: React.FC = () => {
         <div className="text-xs font-mono text-slate-400 bg-slate-900/80 px-2.5 py-1 rounded-md border border-slate-800 hidden md:block">
           {time}
         </div>
+
+        {/* Pending Registration Notifications (Admin/Senior Analyst) */}
+        {canReviewRegistrations && (
+          <a
+            href="/users"
+            className={`relative p-2 rounded-lg transition border ${
+              pendingCount > 0
+                ? 'text-amber-400 bg-amber-950/40 border-amber-800/80 hover:bg-amber-900/60 animate-pulse'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border-transparent'
+            }`}
+            title={pendingCount > 0 ? `${pendingCount} pending user registration request(s) awaiting review` : 'No pending registration requests'}
+          >
+            <Bell size={16} />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-amber-500 text-black text-[9px] font-mono font-bold rounded-full shadow-md">
+                {pendingCount}
+              </span>
+            )}
+          </a>
+        )}
 
         {/* User Profile */}
         <div className="flex items-center gap-3 pl-2 border-l border-slate-800">

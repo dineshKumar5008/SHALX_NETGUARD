@@ -12,9 +12,14 @@ class Device(Base):
     mac_address = Column(String(32), index=True, nullable=True)
     hostname = Column(String(128), index=True, nullable=True)
     vendor = Column(String(128), nullable=True)
-    os_type = Column(String(64), nullable=True)  # Linux, Windows, FreeBSD, RouterOS, Android, etc.
+    os_type = Column(String(64), nullable=True)  # Windows, Android, iOS, Linux, RouterOS, etc.
     os_version = Column(String(64), nullable=True)
-    device_type = Column(String(64), default="workstation", nullable=False)  # workstation, server, router, firewall, switch, soc, mobile
+    os_confidence = Column(String(32), default="Low", nullable=True)  # High, Medium, Low
+    architecture = Column(String(32), nullable=True)  # x86_64, AMD64, ARM64, etc.
+    device_type = Column(String(64), default="Unknown", nullable=False)  # Laptop, Mobile, Desktop, Printer, Router, IoT, Unknown
+    device_type_confidence = Column(String(32), default="Low", nullable=True)  # High, Medium, Low
+    open_ports = Column(Text, nullable=True)  # JSON-encoded list of integers e.g. "[53, 80]"
+    detected_services = Column(Text, nullable=True)  # JSON-encoded list of strings
     status = Column(String(32), default="ONLINE", nullable=False)  # ONLINE, OFFLINE, WARNING, CRITICAL
     is_monitored = Column(Boolean, default=True, nullable=False)
     is_synthetic = Column(Boolean, default=False, nullable=False)

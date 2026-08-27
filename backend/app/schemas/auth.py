@@ -89,3 +89,35 @@ class UserResponse(UserBase):
 class ResetRateLimitRequest(BaseModel):
     username: str = "admin"
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=128, description="Registered email address")
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str = "If the email address is registered, a verification code has been sent."
+    challenge_id: Optional[str] = None
+    masked_email: Optional[str] = None
+    expires_in: int = 600
+
+
+class ForgotPasswordVerifyRequest(BaseModel):
+    challenge_id: str
+    otp: str = Field(min_length=6, max_length=6, description="6-digit verification code")
+
+
+class ForgotPasswordVerifyResponse(BaseModel):
+    message: str = "Email verification successful."
+    reset_token: str
+
+
+class ForgotPasswordResendRequest(BaseModel):
+    challenge_id: str
+
+
+class ForgotPasswordResetRequest(BaseModel):
+    reset_token: str
+    new_password: str = Field(min_length=8, max_length=128, description="New account password")
+    confirm_password: str = Field(min_length=8, max_length=128, description="Confirm new password")
+

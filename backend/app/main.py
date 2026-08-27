@@ -124,7 +124,7 @@ app = FastAPI(
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For flexible lab/VM access
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -147,6 +147,12 @@ async def root():
     }
 
 
+@app.get("/health", tags=["System"])
+async def health():
+    """Lightweight orchestrator and load balancer health check endpoint."""
+    return {"status": "ok"}
+
+
 @app.get("/api/healthcheck", tags=["System"])
 async def healthcheck():
     return {
@@ -155,6 +161,7 @@ async def healthcheck():
         "websockets_active_clients": len(ws_manager.active_connections),
         "environment": settings.ENVIRONMENT
     }
+
 
 
 # WebSocket Endpoints

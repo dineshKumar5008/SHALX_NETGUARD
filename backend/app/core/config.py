@@ -42,13 +42,43 @@ class Settings(BaseSettings):
         description="Real registered destination email address for administrator account MFA delivery"
     )
 
+    # Server & Hosting
+    HOST: str = Field(default="0.0.0.0", description="Production bind host")
+    PORT: int = Field(default=8000, description="Production bind port")
+    FRONTEND_URL: Optional[str] = Field(
+        default=None,
+        description="Public frontend URL (e.g. https://netguard.example.com)"
+    )
+    CORS_ORIGINS: Optional[str] = Field(
+        default=None,
+        description="Comma-separated additional allowed CORS origins"
+    )
+
+    # Storage
+    REPORTS_STORAGE_PATH: str = Field(
+        default="./reports_storage",
+        description="Directory for persistent PDF report storage"
+    )
+
     # Database
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./netguard.db",
-        description="Async database connection string"
+        description="Async database connection string (SQLite or PostgreSQL)"
     )
-    
-    # CORS
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: Optional[str]) -> str:
+        if not v:
+            return "sqlite+aiosqlite:///./netguard.db"
+        val = str(v).strip()
+        if val.startswith("postgres://"):
+            return val.replace("postgres://", "postgresql+asyncpg://", 1)
+        if val.startswith("postgresql://") and not val.startswith("postgresql+asyncpg://"):
+            return val.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return val
+
+    # Baseline Development & Local CORS
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -57,6 +87,22 @@ class Settings(BaseSettings):
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Dynamically compute allowed CORS origins from defaults and environment variables."""
+        origins = list(self.BACKEND_CORS_ORIGINS)
+        if self.FRONTEND_URL:
+            clean_fe = self.FRONTEND_URL.strip().rstrip("/")
+            if clean_fe and clean_fe not in origins:
+                origins.append(clean_fe)
+        if self.CORS_ORIGINS:
+            for item in self.CORS_ORIGINS.split(","):
+                clean_item = item.strip().rstrip("/")
+                if clean_item and clean_item not in origins:
+                    origins.append(clean_item)
+        return origins
+
 
     # Monitored Networks (CIDRs) - Defaults to empty so discovery dynamically inspects active host interface subnets
     MONITORED_NETWORKS: List[str] = []

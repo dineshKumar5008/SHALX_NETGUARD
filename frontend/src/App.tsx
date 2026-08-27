@@ -6,6 +6,9 @@ import { LoadingSpinner } from './components/common/LoadingSpinner';
 
 // Pages
 import { Login } from './pages/Login';
+import { Register } from './pages/Register';
+import { RegistrationStatus } from './pages/RegistrationStatus';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { Dashboard } from './pages/Dashboard';
 import { NetworkTopology } from './pages/NetworkTopology';
 import { Devices } from './pages/Devices';
@@ -45,12 +48,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Admin Only Route Guard
-const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAdmin, isLoading } = useAuth();
+// Reviewer (Admin & Senior Analyst) Route Guard
+const ReviewerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { canReviewRegistrations, isLoading } = useAuth();
 
   if (isLoading) return null;
-  if (!isAdmin) {
+  if (!canReviewRegistrations) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -60,6 +63,9 @@ export const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/registration-status/:id" element={<RegistrationStatus />} />
 
       {/* Protected SOC App Shell */}
       <Route
@@ -88,13 +94,13 @@ export const App: React.FC = () => {
         <Route path="/health" element={<SystemHealth />} />
         <Route path="/about" element={<About />} />
 
-        {/* Admin only route */}
+        {/* Admin & Senior Analyst User Management Route */}
         <Route
           path="/users"
           element={
-            <AdminRoute>
+            <ReviewerRoute>
               <Users />
-            </AdminRoute>
+            </ReviewerRoute>
           }
         />
       </Route>

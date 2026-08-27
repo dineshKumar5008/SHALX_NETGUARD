@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import socket
@@ -22,7 +23,48 @@ from backend.app.websocket.manager import ws_manager
 
 logger = logging.getLogger("netguard.collectors.discovery")
 
-# Comprehensive IEEE OUI Vendor & Mobile Device Database Mapping
+# Comprehensive Port to Service Name Mapping
+PORT_SERVICE_MAP = {
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    67: "DHCP Server",
+    68: "DHCP Client",
+    80: "HTTP Web Server",
+    110: "POP3",
+    123: "NTP",
+    135: "MSRPC (Windows RPC)",
+    137: "NetBIOS-NS",
+    138: "NetBIOS-DGM",
+    139: "NetBIOS-SSN",
+    143: "IMAP",
+    443: "HTTPS Web Server",
+    445: "Microsoft-DS (SMB)",
+    515: "LPD Line Printer Daemon",
+    554: "RTSP Video Stream",
+    631: "IPP Internet Printing Protocol",
+    993: "IMAPS",
+    995: "POP3S",
+    1883: "MQTT IoT Broker",
+    1900: "UPnP / SSDP Media Service",
+    3306: "MySQL Database",
+    3389: "MS-RDP Remote Desktop",
+    5000: "UPnP / Media Server",
+    5353: "mDNS Multicast DNS",
+    5357: "WSD (Web Services for Devices)",
+    5432: "PostgreSQL Database",
+    7000: "AirPlay Mirroring",
+    8000: "HTTP NetGuard / Dev API",
+    8008: "Google Cast / Chromecast API",
+    8009: "Google Cast Protocol",
+    8080: "HTTP-Proxy / Router Web Admin",
+    8443: "HTTPS-Alt / Router Web Admin",
+    9100: "RAW JetDirect Print Server",
+}
+
+# Comprehensive IEEE OUI Vendor Database Mapping
 VENDOR_MAP = {
     # Virtualization & Cloud
     "00:50:56": "VMware Virtual Machine",
@@ -99,6 +141,40 @@ VENDOR_MAP = {
     "40:88:05": "Motorola Mobility",
     "F8:CF:C5": "Motorola Mobility",
 
+    # Printers & Imaging
+    "00:1E:0B": "HP LaserJet / Printer",
+    "00:11:0A": "Hewlett-Packard Printer",
+    "00:1E:8F": "Canon Printer",
+    "00:00:85": "Canon Inc.",
+    "00:26:AB": "Seiko Epson Printer",
+    "00:00:48": "Seiko Epson Corp.",
+    "00:80:77": "Brother Industries Printer",
+    "00:00:AA": "Xerox Corporation Printer",
+    "00:00:07": "Xerox Corporation",
+    "00:04:00": "Lexmark International",
+    "00:20:00": "Lexmark International",
+
+    # IoT & Smart Devices
+    "68:37:E9": "Amazon Technologies (Echo/FireTV)",
+    "FC:65:DE": "Amazon Technologies (Echo/FireTV)",
+    "B4:7C:9C": "Amazon Technologies",
+    "D8:31:34": "Roku Inc.",
+    "00:0D:4B": "Roku Streaming",
+    "94:10:3E": "Sonos Inc.",
+    "5C:AA:FD": "Sonos Inc.",
+    "24:0A:C4": "Espressif IoT (ESP32/ESP8266)",
+    "30:AE:A4": "Espressif IoT (ESP32/ESP8266)",
+    "D8:F1:5B": "Espressif IoT",
+    "68:C6:3A": "Tuya Smart IoT",
+    "70:2C:1F": "Tuya Smart IoT",
+    "A4:C1:38": "Tuya Smart IoT",
+    "54:60:09": "Google Nest / Chromecast",
+    "6C:AD:F8": "Google Home / Chromecast",
+    "CC:2D:B7": "LG Electronics Smart TV",
+    "00:04:1F": "Sony Corporation (Bravia TV)",
+    "70:9E:29": "Sony Interactive (PlayStation)",
+    "00:17:88": "Philips Lighting (Hue Bridge)",
+
     # PC / Server / Workstation Hardware
     "00:1A:A0": "Dell PowerEdge",
     "00:1E:4F": "Dell Computer",
@@ -127,9 +203,12 @@ VENDOR_MAP = {
     # Network Gateways & Routers
     "F8:75:A4": "Cisco Systems",
     "00:08:E3": "Cisco Systems",
+    "00:1C:10": "Cisco Systems",
     "00:04:96": "Extreme Networks",
     "00:08:54": "Netgear",
     "00:1F:33": "Netgear",
+    "00:09:5B": "Netgear Inc.",
+    "20:E5:2A": "Netgear Inc.",
     "70:3A:0E": "Ubiquiti Networks",
     "B4:FB:E4": "Ubiquiti Networks",
     "00:0C:42": "MikroTik RouterOS",
@@ -137,7 +216,10 @@ VENDOR_MAP = {
     "50:C7:BF": "TP-Link Technologies",
     "C0:06:C3": "TP-Link Technologies",
     "00:25:86": "TP-Link Technologies",
+    "00:0C:E6": "TP-Link Technologies",
     "00:1E:58": "D-Link International",
+    "00:13:49": "Zyxel Communications",
+    "00:18:39": "Cisco-Linksys",
 }
 
 
@@ -400,22 +482,60 @@ class NetworkDiscoveryService:
     def get_local_host_device(self) -> Dict[str, Any]:
         """
         Inspect the local host machine running NetGuard.
-        Returns ONE unified Device record representing the host laptop.
+        Returns ONE unified Device record representing the host laptop/workstation with high confidence.
         """
         context = get_primary_host_network_context()
         host_name = socket.gethostname()
         os_sys = platform.system()
         os_ver = f"{platform.system()} {platform.release()}"
+        arch = platform.machine()
         vendor = get_vendor_by_mac(context.get("mac_address")) or "Host Laptop / PC"
+
+        # Hardware chassis & battery detection
+        has_battery = False
+        try:
+            battery = psutil.sensors_battery()
+            has_battery = (battery is not None)
+        except Exception:
+            pass
+
+        host_upper = host_name.upper()
+        if has_battery or host_upper.startswith("LAPTOP-") or "NOTEBOOK" in host_upper or "SURFACE" in host_upper or "THINKPAD" in host_upper:
+            detected_dev_type = "Laptop"
+        elif host_upper.startswith("DESKTOP-") or host_upper.startswith("PC-") or "WORKSTATION" in host_upper:
+            detected_dev_type = "Desktop"
+        else:
+            if_name_lower = (context.get("interface_name") or "").lower()
+            detected_dev_type = "Laptop" if ("wi" in if_name_lower or "wlan" in if_name_lower) else "Desktop"
+
+        # Scan local listening ports
+        local_open_ports = []
+        try:
+            for conn in psutil.net_connections(kind='inet'):
+                if conn.status == psutil.CONN_LISTEN and conn.laddr.port not in local_open_ports:
+                    local_open_ports.append(conn.laddr.port)
+        except Exception:
+            pass
+
+        detected_services = []
+        for p in local_open_ports:
+            srv = PORT_SERVICE_MAP.get(p)
+            if srv and srv not in detected_services:
+                detected_services.append(srv)
 
         return {
             "ip_address": context["ip_address"],
             "mac_address": context.get("mac_address"),
             "hostname": host_name,
             "vendor": vendor,
-            "os_type": os_sys,
+            "os_type": "Windows" if os_sys.lower() == "windows" else "macOS" if os_sys.lower() == "darwin" else os_sys,
             "os_version": os_ver,
-            "device_type": "soc",
+            "os_confidence": "High",
+            "architecture": arch,
+            "device_type": detected_dev_type,
+            "device_type_confidence": "High",
+            "open_ports": json.dumps(sorted(local_open_ports[:25])),
+            "detected_services": json.dumps(detected_services[:25]),
             "interface_name": context.get("interface_name", "Wi-Fi"),
             "secondary_interfaces": context.get("secondary_interfaces", [])
         }
@@ -452,11 +572,11 @@ class NetworkDiscoveryService:
                                     if norm_mac and norm_mac != "FF:FF:FF:FF:FF:FF":
                                         # Verify IP belongs to a monitored subnet
                                         try:
-                                            ip_obj = ipaddress.IPv4Address(ip_candidate)
-                                            if not ip_networks or any(ip_obj in net for net in ip_networks):
-                                                arp_entries[ip_candidate] = norm_mac
+                                             ip_obj = ipaddress.IPv4Address(ip_candidate)
+                                             if not ip_networks or any(ip_obj in net for net in ip_networks):
+                                                 arp_entries[ip_candidate] = norm_mac
                                         except Exception:
-                                            pass
+                                             pass
             elif os_name == "linux":
                 if os.path.exists("/proc/net/arp"):
                     with open("/proc/net/arp", "r") as f:
@@ -495,7 +615,7 @@ class NetworkDiscoveryService:
         return arp_entries
 
     async def _probe_single_ip(self, ip: str, semaphore: asyncio.Semaphore) -> Tuple[str, bool, Optional[int]]:
-        """Probe a single IP across common ports (53, 80, 443, 135, 8080, 22) to stimulate ARP resolution."""
+        """Probe a single IP across common ports to stimulate ARP resolution."""
         async with semaphore:
             test_ports = [53, 80, 443, 135, 8080, 22]
             for port in test_ports:
@@ -531,19 +651,16 @@ class NetworkDiscoveryService:
     async def fingerprint_node(self, ip: str, mac: Optional[str], default_gw_ip: Optional[str]) -> Dict[str, Any]:
         """
         Enrich discovered node with real verified hostname, vendor, operating system, and device type.
-        Never assigns the laptop's own hostname to another node.
+        Calculates device_type, device_type_confidence, os_type, os_confidence, open_ports, detected_services.
         """
         hostname = resolve_hostname(ip)
         vendor = get_vendor_by_mac(mac)
-        os_type = None
-        os_version = None
-        device_type = "workstation"
-
-        # Check if this node is the default gateway (e.g. Mobile A Hotspot)
         is_gw = (ip == default_gw_ip)
 
+        # Probe ports for evidence
+        probe_ports = [53, 67, 80, 443, 9100, 515, 631, 135, 139, 445, 3389, 5357, 22, 8008, 8009, 1900, 1883, 5000, 8080, 8443]
         open_ports = []
-        for port in [53, 80, 443, 135, 445, 22, 3389, 8080]:
+        for port in probe_ports:
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.settimeout(0.08)
@@ -554,26 +671,121 @@ class NetworkDiscoveryService:
             except Exception:
                 pass
 
-        if is_gw:
-            device_type = "router"
+        # Identify detected services
+        detected_services = []
+        for p in open_ports:
+            srv = PORT_SERVICE_MAP.get(p)
+            if srv and srv not in detected_services:
+                detected_services.append(srv)
+
+        # Evidence-based classification
+        device_type = "Unknown"
+        device_type_confidence = "Low"
+        os_type = None
+        os_version = None
+        os_confidence = "Low"
+        architecture = None
+
+        hostname_upper = (hostname or "").upper()
+        vendor_lower = (vendor or "").lower()
+
+        # 1. PRINTER CLASSIFICATION
+        if 9100 in open_ports or 515 in open_ports or 631 in open_ports:
+            device_type = "Printer"
+            device_type_confidence = "High"
+            os_type = "Printer Firmware"
+            os_confidence = "High"
+        elif vendor and any(p in vendor_lower for p in ["printer", "canon", "epson", "brother", "xerox", "lexmark", "kyocera", "ricoh", "konica"]):
+            device_type = "Printer"
+            device_type_confidence = "High" if (80 in open_ports or 443 in open_ports) else "Medium"
+            os_type = "Printer Firmware"
+            os_confidence = "Medium"
+        elif any(p in hostname_upper for p in ["PRINTER", "HP-LASER", "EPSON", "CANON", "BROTHER", "DIRECT-"]):
+            device_type = "Printer"
+            device_type_confidence = "High"
+            os_type = "Printer Firmware"
+            os_confidence = "Medium"
+
+        # 2. ROUTER / GATEWAY CLASSIFICATION
+        elif is_gw:
+            device_type = "Router"
+            device_type_confidence = "High"
             if not vendor:
-                vendor = "Mobile Hotspot Gateway"
+                vendor = "Mobile Hotspot / Gateway"
             if 53 in open_ports and 80 not in open_ports and 443 not in open_ports:
                 os_type = "Mobile OS (Hotspot)"
+                os_confidence = "Medium"
             else:
                 os_type = "RouterOS / Firmware"
-        elif 135 in open_ports or 445 in open_ports or 3389 in open_ports:
+                os_confidence = "Medium"
+        elif (53 in open_ports or 67 in open_ports) and (80 in open_ports or 443 in open_ports or any(r in vendor_lower for r in ["router", "cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel"])):
+            device_type = "Router"
+            device_type_confidence = "High"
+            os_type = "RouterOS / Firmware"
+            os_confidence = "Medium"
+        elif vendor and any(r in vendor_lower for r in ["cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel"]):
+            device_type = "Router"
+            device_type_confidence = "Medium"
+            os_type = "RouterOS / Firmware"
+            os_confidence = "Low"
+
+        # 3. IOT / SMART HOME / MEDIA CLASSIFICATION
+        elif any(p in open_ports for p in [8008, 8009, 1900, 1883, 5000]) or (vendor and any(i in vendor_lower for i in ["roku", "sonos", "espressif", "tuya", "smart tv", "amazon", "nest", "chromecast", "hue", "bravia", "playstation"])):
+            device_type = "IoT"
+            device_type_confidence = "High"
+            os_type = "Embedded Linux / IoT"
+            os_confidence = "Medium"
+        elif any(i in hostname_upper for i in ["TV", "CHROMECAST", "ROKU", "ECHO", "SMART", "IOT", "CAM", "SONOS", "ALEXA"]):
+            device_type = "IoT"
+            device_type_confidence = "High"
+            os_type = "Embedded Linux / IoT"
+            os_confidence = "Medium"
+
+        # 4. MOBILE PHONE / TABLET CLASSIFICATION
+        elif vendor and any(m in vendor_lower for m in ["apple", "samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "mobile"]):
+            device_type = "Mobile"
+            device_type_confidence = "High"
+            os_type = "iOS" if "apple" in vendor_lower else "Android"
+            os_confidence = "Medium"
+        elif any(m in hostname_upper for m in ["IPHONE", "IPAD", "ANDROID", "GALAXY", "PIXEL", "REDMI", "ONEPLUS", "VIVO", "OPPO", "SM-"]):
+            device_type = "Mobile"
+            device_type_confidence = "High"
+            os_type = "iOS" if ("IPHONE" in hostname_upper or "IPAD" in hostname_upper) else "Android"
+            os_confidence = "High"
+        elif mac and is_locally_administered_mac(mac) and not (135 in open_ports or 445 in open_ports or 22 in open_ports):
+            device_type = "Mobile"
+            device_type_confidence = "Medium"
+            os_type = "Android / iOS (Private Wi-Fi MAC)"
+            os_confidence = "Medium"
+
+        # 5. LAPTOP / DESKTOP / WORKSTATION CLASSIFICATION
+        elif any(h in hostname_upper for h in ["LAPTOP-", "NOTEBOOK", "THINKPAD", "MACBOOK", "SURFACE"]):
+            device_type = "Laptop"
+            device_type_confidence = "High"
+            os_type = "macOS" if "MACBOOK" in hostname_upper else "Windows"
+            os_confidence = "High"
+        elif any(h in hostname_upper for h in ["DESKTOP-", "PC-", "WORKSTATION", "RIG-", "MINIPC"]):
+            device_type = "Desktop"
+            device_type_confidence = "High"
             os_type = "Windows"
-            device_type = "workstation"
+            os_confidence = "High"
+        elif 135 in open_ports or 445 in open_ports or 3389 in open_ports or 5357 in open_ports:
+            os_type = "Windows"
+            os_confidence = "High"
+            device_type = "Desktop"
+            device_type_confidence = "Medium"
         elif 22 in open_ports:
             os_type = "Linux"
-            device_type = "server"
-        elif vendor and any(m in vendor.lower() for m in ["apple", "samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "mobile"]):
-            device_type = "mobile"
-            os_type = "Android / iOS"
-        elif mac and is_locally_administered_mac(mac):
-            device_type = "mobile"
-            os_type = "Android / iOS (Private MAC)"
+            os_confidence = "High"
+            device_type = "Desktop"
+            device_type_confidence = "Medium"
+
+        # 6. UNKNOWN (Insufficient Evidence)
+        else:
+            device_type = "Unknown"
+            device_type_confidence = "Low"
+            os_type = None
+            os_confidence = "Low"
 
         return {
             "ip_address": ip,
@@ -582,7 +794,12 @@ class NetworkDiscoveryService:
             "vendor": vendor,
             "os_type": os_type,
             "os_version": os_version,
+            "os_confidence": os_confidence,
+            "architecture": architecture,
             "device_type": device_type,
+            "device_type_confidence": device_type_confidence,
+            "open_ports": json.dumps(open_ports),
+            "detected_services": json.dumps(detected_services),
             "status": "ONLINE"
         }
 
@@ -697,16 +914,42 @@ class NetworkDiscoveryService:
             if data.get("vendor") and not dev.vendor:
                 dev.vendor = data["vendor"]
 
-            if data.get("os_type") and not dev.os_type:
+            if data.get("os_type"):
                 dev.os_type = data["os_type"]
+            if data.get("os_version"):
+                dev.os_version = data["os_version"]
+            if data.get("os_confidence"):
+                dev.os_confidence = data["os_confidence"]
+            if data.get("architecture"):
+                dev.architecture = data["architecture"]
 
-            if data.get("device_type") and dev.device_type == "workstation" and data["device_type"] != "workstation":
-                dev.device_type = data["device_type"]
+            if data.get("device_type"):
+                # Overwrite if current is Unknown/workstation or new confidence is High
+                if dev.device_type in ["Unknown", "workstation"] or data.get("device_type_confidence") == "High":
+                    dev.device_type = data["device_type"]
+                    dev.device_type_confidence = data.get("device_type_confidence", "Low")
+                elif not dev.device_type:
+                    dev.device_type = data["device_type"]
+                    dev.device_type_confidence = data.get("device_type_confidence", "Low")
+
+            ports_raw = data.get("open_ports")
+            if ports_raw is not None:
+                dev.open_ports = json.dumps(ports_raw) if isinstance(ports_raw, list) else ports_raw
+
+            services_raw = data.get("detected_services")
+            if services_raw is not None:
+                dev.detected_services = json.dumps(services_raw) if isinstance(services_raw, list) else services_raw
 
             dev.status = "ONLINE"
             dev.is_synthetic = False
             dev.last_seen = now
         else:
+            ports_raw = data.get("open_ports")
+            ports_str = json.dumps(ports_raw) if isinstance(ports_raw, list) else (ports_raw or "[]")
+
+            services_raw = data.get("detected_services")
+            services_str = json.dumps(services_raw) if isinstance(services_raw, list) else (services_raw or "[]")
+
             dev = Device(
                 ip_address=ip,
                 mac_address=mac,
@@ -714,7 +957,12 @@ class NetworkDiscoveryService:
                 vendor=data.get("vendor"),
                 os_type=data.get("os_type"),
                 os_version=data.get("os_version"),
-                device_type=data.get("device_type", "workstation"),
+                os_confidence=data.get("os_confidence", "Low"),
+                architecture=data.get("architecture"),
+                device_type=data.get("device_type", "Unknown"),
+                device_type_confidence=data.get("device_type_confidence", "Low"),
+                open_ports=ports_str,
+                detected_services=services_str,
                 status="ONLINE",
                 is_monitored=True,
                 is_synthetic=False,

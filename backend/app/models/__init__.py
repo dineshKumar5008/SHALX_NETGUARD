@@ -1,6 +1,6 @@
 from backend.app.core.database import Base
 from backend.app.models.user import User
-from backend.app.models.mfa import MFAChallenge
+from backend.app.models.mfa import MFAChallenge, PasswordResetChallenge
 from backend.app.models.device import Device, NetworkInterface
 from backend.app.models.security_event import SecurityEvent
 from backend.app.models.alert import Alert
@@ -10,10 +10,12 @@ from backend.app.models.metrics import TrafficMetric, HealthMetric, AgentHeartbe
 from backend.app.models.notification import NotificationSetting, NotificationLog
 from backend.app.models.audit import AuditLog
 from backend.app.models.settings import SystemSetting
+from backend.app.models.registration import RegistrationRequest
 
 __all__ = [
     "Base",
     "User",
+    "RegistrationRequest",
     "MFAChallenge",
     "Device",
     "NetworkInterface",

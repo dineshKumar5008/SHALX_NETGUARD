@@ -9,7 +9,7 @@ from backend.app.core.security import get_password_hash
 
 # Import all models to ensure complete metadata registration
 from backend.app.models.user import User
-from backend.app.models.mfa import MFAChallenge
+from backend.app.models.mfa import MFAChallenge, PasswordResetChallenge
 from backend.app.models.device import Device, NetworkInterface
 from backend.app.models.alert import Alert
 from backend.app.models.incident import Incident, IncidentTimeline
@@ -17,6 +17,7 @@ from backend.app.models.metrics import HealthMetric, TrafficMetric, AgentHeartbe
 from backend.app.models.firewall import BlockedIP, FirewallRule
 from backend.app.models.security_event import SecurityEvent
 from backend.app.models.audit import AuditLog
+from backend.app.models.registration import RegistrationRequest
 
 from backend.app.main import app
 
@@ -54,6 +55,14 @@ async def setup_db():
             role="ADMIN",
             is_active=True
         )
+        senior_analyst = User(
+            username="testsenioranalyst",
+            email="senioranalyst@shalx-soc.com",
+            full_name="Test Senior Analyst",
+            hashed_password=get_password_hash("Password123!"),
+            role="SENIOR_ANALYST",
+            is_active=True
+        )
         analyst = User(
             username="testanalyst",
             email="analyst@shalx-soc.com",
@@ -70,7 +79,7 @@ async def setup_db():
             role="VIEWER",
             is_active=True
         )
-        session.add_all([admin, analyst, viewer])
+        session.add_all([admin, senior_analyst, analyst, viewer])
         await session.commit()
 
     yield

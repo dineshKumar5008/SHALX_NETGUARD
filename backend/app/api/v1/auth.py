@@ -12,14 +12,19 @@ from sqlalchemy import func, update, delete
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.core.security import verify_password, get_password_hash, create_access_token, get_current_user
+import secrets
 from backend.app.core.audit import record_audit_log
 from backend.app.models.user import User
-from backend.app.models.mfa import MFAChallenge
+from backend.app.models.mfa import MFAChallenge, PasswordResetChallenge
+from backend.app.models.registration import RegistrationRequest
 from backend.app.schemas.auth import (
     Token, UserResponse, PasswordChangeRequest, LoginRequest, LoginMfaResponse,
     MFAVerifyRequest, MFAResendRequest, SetupAdminEmailRequest, UserProfileUpdateRequest,
-    ResetRateLimitRequest
+    ResetRateLimitRequest, ForgotPasswordRequest, ForgotPasswordResponse,
+    ForgotPasswordVerifyRequest, ForgotPasswordVerifyResponse, ForgotPasswordResendRequest,
+    ForgotPasswordResetRequest
 )
+from backend.app.schemas.registration import RegistrationSubmitRequest, RegistrationStatusResponse
 from backend.app.services.mfa_service import mfa_service
 
 logger = logging.getLogger("netguard.auth")
@@ -585,3 +590,465 @@ async def reset_rate_limit(
         "success": True,
         "message": f"Rate-limit state cleared for user '{user.username}'. You may now log in."
     }
+
+
+@router.post("/register", response_model=RegistrationStatusResponse, status_code=status.HTTP_201_CREATED)
+async def submit_registration_request(
+    payload: RegistrationSubmitRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Public user self-registration submission:
+    1. Validates all required applicant fields and email format.
+    2. Verifies unique username and email across users and pending requests.
+    3. Hashes password securely using bcrypt.
+    4. Creates RegistrationRequest record with status 'PENDING'.
+    5. Dispatches notification email to system administrators and senior analysts.
+    6. Records security audit event.
+    7. Returns pending status response (no automatic login or access token issued).
+    """
+    clean_username = payload.username.strip()
+    clean_email = payload.email.strip().lower()
+    clean_full_name = payload.full_name.strip()
+    clean_department = payload.department.strip()
+    clean_reason = payload.reason.strip()
+
+    if not mfa_service.is_valid_production_email(clean_email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide a valid real production email address."
+        )
+
+    # Check for duplicate user account
+    stmt_user = select(User).where(
+        (func.lower(User.username) == clean_username.lower()) | (func.lower(User.email) == clean_email)
+    )
+    existing_user = (await db.execute(stmt_user)).scalars().first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account or registration request already exists for these details."
+        )
+
+    # Check for duplicate pending registration request
+    stmt_pending = select(RegistrationRequest).where(
+        RegistrationRequest.status == "PENDING",
+        (func.lower(RegistrationRequest.username) == clean_username.lower()) | (func.lower(RegistrationRequest.email) == clean_email)
+    )
+    existing_pending = (await db.execute(stmt_pending)).scalars().first()
+    if existing_pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account or registration request already exists for these details."
+        )
+
+    hashed_pw = get_password_hash(payload.password)
+    now = datetime.now(timezone.utc)
+
+    reg_req = RegistrationRequest(
+        full_name=clean_full_name,
+        username=clean_username,
+        email=clean_email,
+        password_hash=hashed_pw,
+        department=clean_department,
+        reason=clean_reason,
+        requested_role="VIEWER",
+        status="PENDING",
+        created_at=now
+    )
+    db.add(reg_req)
+    await db.commit()
+    await db.refresh(reg_req)
+
+    masked_email = mfa_service.mask_email(clean_email)
+
+    # Dispatch notification to Administrators and Senior Analysts
+    stmt_reviewers = select(User.email).where(
+        User.role.in_(["ADMIN", "SENIOR_ANALYST"]),
+        User.is_active == True,
+        User.email.isnot(None),
+        User.email != ""
+    )
+    reviewer_emails = (await db.execute(stmt_reviewers)).scalars().all()
+    admin_emails = list(reviewer_emails)
+    if settings.ADMIN_EMAIL and settings.ADMIN_EMAIL not in admin_emails:
+        admin_emails.append(settings.ADMIN_EMAIL)
+
+    try:
+        await mfa_service.send_registration_submitted_admin_notification(
+            admin_emails=admin_emails,
+            req_data={
+                "id": reg_req.id,
+                "full_name": clean_full_name,
+                "username": clean_username,
+                "email": clean_email,
+                "department": clean_department,
+                "reason": clean_reason,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to dispatch reviewer registration notification: {e}")
+
+    await record_audit_log(
+        db,
+        user=clean_username,
+        action="REGISTRATION_SUBMITTED",
+        resource=f"/api/v1/auth/register/{reg_req.id}",
+        result="SUCCESS",
+        metadata={
+            "registration_id": reg_req.id,
+            "department": clean_department,
+            "masked_email": masked_email
+        }
+    )
+
+    return RegistrationStatusResponse(
+        id=reg_req.id,
+        username=reg_req.username,
+        masked_email=masked_email,
+        status="PENDING",
+        created_at=reg_req.created_at,
+        reviewed_at=reg_req.reviewed_at,
+        rejection_reason=reg_req.rejection_reason,
+        message="Registration request submitted successfully. Your account is pending approval by an administrator or senior analyst."
+    )
+
+
+@router.get("/registration-status/{request_id}", response_model=RegistrationStatusResponse)
+async def get_registration_status(
+    request_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Public lookup for applicant to check their registration request status.
+    """
+    stmt = select(RegistrationRequest).where(RegistrationRequest.id == request_id)
+    req = (await db.execute(stmt)).scalars().first()
+    if not req:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration request not found")
+
+    masked_email = mfa_service.mask_email(req.email)
+    if req.status == "APPROVED":
+        msg = "Your registration request has been approved! You can now log in using your registered credentials."
+    elif req.status == "REJECTED":
+        msg = "Your registration request was not approved."
+    else:
+        msg = "Your registration request is waiting for approval by an administrator or senior analyst."
+
+    return RegistrationStatusResponse(
+        id=req.id,
+        username=req.username,
+        masked_email=masked_email,
+        status=req.status,
+        created_at=req.created_at,
+        reviewed_at=req.reviewed_at,
+        rejection_reason=req.rejection_reason,
+        message=msg
+    )
+
+
+# ============================================================================
+# FORGOT PASSWORD & PASSWORD RECOVERY ENDPOINTS
+# ============================================================================
+
+@router.post("/forgot-password/request", response_model=ForgotPasswordResponse)
+async def forgot_password_request(
+    req_in: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Step 1 of Password Recovery:
+    1. Look up user by registered email.
+    2. Enforces generic anti-enumeration response if email does not exist or account is inactive.
+    3. Generates a dynamic 6-digit OTP, stores salted cryptographic hash in password_reset_challenges.
+    4. Delivers verification code to user's registered email via SMTP.
+    """
+    clean_email = req_in.email.strip().lower()
+    stmt = select(User).where(func.lower(User.email) == clean_email)
+    user = (await db.execute(stmt)).scalars().first()
+
+    now = datetime.now(timezone.utc)
+
+    if user and user.is_active and mfa_service.is_valid_production_email(user.email):
+        # Rate limiting: max 5 requests per 10 minutes per user
+        ten_mins_ago = now - timedelta(minutes=10)
+        recent_stmt = select(func.count(PasswordResetChallenge.id)).where(
+            PasswordResetChallenge.user_id == user.id,
+            PasswordResetChallenge.created_at >= ten_mins_ago
+        )
+        recent_count = (await db.execute(recent_stmt)).scalar() or 0
+        if recent_count >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many password reset attempts. Please wait 10 minutes before requesting again."
+            )
+
+        # Invalidate existing unused challenges for this user
+        await db.execute(
+            update(PasswordResetChallenge)
+            .where(PasswordResetChallenge.user_id == user.id, PasswordResetChallenge.is_used == False)
+            .values(is_used=True)
+        )
+
+        otp = mfa_service.generate_secure_otp()
+        otp_hash = mfa_service.hash_otp(otp)
+        challenge_id = uuid.uuid4().hex
+        expires_at = now + timedelta(minutes=10)
+
+        challenge = PasswordResetChallenge(
+            challenge_id=challenge_id,
+            user_id=user.id,
+            otp_hash=otp_hash,
+            created_at=now,
+            expires_at=expires_at,
+            attempt_count=0,
+            resend_count=0,
+            is_verified=False,
+            is_used=False,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        db.add(challenge)
+        await db.commit()
+
+        sent_ok, send_err = await mfa_service.send_password_reset_otp_email(
+            recipient_email=user.email,
+            otp=otp,
+            recipient_name=user.full_name
+        )
+
+        if not sent_ok:
+            logger.warning(f"Password reset OTP SMTP delivery notice for {mfa_service.mask_email(user.email)}: {send_err}")
+
+        await record_audit_log(
+            db,
+            user=user.username,
+            action="PASSWORD_RESET_REQUESTED",
+            resource="/api/v1/auth/forgot-password/request",
+            result="SUCCESS",
+            metadata={"masked_email": mfa_service.mask_email(user.email)}
+        )
+
+        return ForgotPasswordResponse(
+            message="If the email address is registered, a verification code has been sent.",
+            challenge_id=challenge_id,
+            masked_email=mfa_service.mask_email(user.email),
+            expires_in=600
+        )
+    else:
+        # Anti-enumeration response: Generic message even if user does not exist
+        return ForgotPasswordResponse(
+            message="If the email address is registered, a verification code has been sent.",
+            challenge_id=None,
+            masked_email=mfa_service.mask_email(clean_email),
+            expires_in=600
+        )
+
+
+@router.post("/forgot-password/verify", response_model=ForgotPasswordVerifyResponse)
+async def forgot_password_verify(
+    verify_in: ForgotPasswordVerifyRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Step 2 of Password Recovery:
+    Validates the 6-digit OTP against stored salted hash.
+    On success, generates a cryptographically secure single-use reset_token valid for 15 minutes.
+    """
+    stmt = select(PasswordResetChallenge).where(
+        PasswordResetChallenge.challenge_id == verify_in.challenge_id,
+        PasswordResetChallenge.is_used == False
+    )
+    challenge = (await db.execute(stmt)).scalars().first()
+
+    if not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired recovery session. Please request a new verification code."
+        )
+
+    now = datetime.now(timezone.utc)
+    challenge_exp = challenge.expires_at
+    if challenge_exp.tzinfo is None:
+        challenge_exp = challenge_exp.replace(tzinfo=timezone.utc)
+
+    if challenge_exp < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired. Please request a new code."
+        )
+
+    if challenge.attempt_count >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum verification attempts exceeded. Please request a new verification code."
+        )
+
+    if not mfa_service.verify_otp_hash(verify_in.otp.strip(), challenge.otp_hash):
+        challenge.attempt_count += 1
+        await db.commit()
+        remaining = max(0, 5 - challenge.attempt_count)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid verification code. {remaining} attempt(s) remaining."
+        )
+
+    # Valid OTP: issue single-use reset_token
+    reset_token = secrets.token_urlsafe(32)
+    challenge.is_verified = True
+    challenge.reset_token = reset_token
+    challenge.reset_token_expires_at = now + timedelta(minutes=15)
+    await db.commit()
+
+    await record_audit_log(
+        db,
+        user=f"user_id:{challenge.user_id}",
+        action="PASSWORD_RESET_OTP_VERIFIED",
+        resource="/api/v1/auth/forgot-password/verify",
+        result="SUCCESS",
+        metadata={"challenge_id": challenge.challenge_id}
+    )
+
+    return ForgotPasswordVerifyResponse(
+        message="Email verification successful. You may now set a new password.",
+        reset_token=reset_token
+    )
+
+
+@router.post("/forgot-password/resend")
+async def forgot_password_resend(
+    resend_in: ForgotPasswordResendRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resend dynamic 6-digit OTP code for active recovery session (max 3 resends).
+    """
+    stmt = select(PasswordResetChallenge).where(
+        PasswordResetChallenge.challenge_id == resend_in.challenge_id,
+        PasswordResetChallenge.is_used == False
+    )
+    challenge = (await db.execute(stmt)).scalars().first()
+
+    if not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid recovery session. Please request a new code."
+        )
+
+    if challenge.resend_count >= 3:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum resend limit reached for this session. Please start a new password recovery request."
+        )
+
+    user_stmt = select(User).where(User.id == challenge.user_id)
+    user = (await db.execute(user_stmt)).scalars().first()
+    if not user or not user.email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to resend code.")
+
+    new_otp = mfa_service.generate_secure_otp()
+    challenge.otp_hash = mfa_service.hash_otp(new_otp)
+    challenge.resend_count += 1
+    challenge.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    await db.commit()
+
+    sent_ok, send_err = await mfa_service.send_password_reset_otp_email(
+        recipient_email=user.email,
+        otp=new_otp,
+        recipient_name=user.full_name
+    )
+
+    return {
+        "message": "A new verification code has been dispatched to your registered email.",
+        "challenge_id": challenge.challenge_id,
+        "expires_in": 600
+    }
+
+
+@router.post("/forgot-password/reset")
+async def forgot_password_reset(
+    reset_in: ForgotPasswordResetRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Step 3 of Password Recovery:
+    Validates reset_token and password criteria, updates password in database, burns token.
+    """
+    if reset_in.new_password != reset_in.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password and confirmation password do not match."
+        )
+
+    if len(reset_in.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long."
+        )
+
+    stmt = select(PasswordResetChallenge).where(
+        PasswordResetChallenge.reset_token == reset_in.reset_token,
+        PasswordResetChallenge.is_verified == True,
+        PasswordResetChallenge.is_used == False
+    )
+    challenge = (await db.execute(stmt)).scalars().first()
+
+    if not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset session. Please request a new verification code."
+        )
+
+    now = datetime.now(timezone.utc)
+    token_exp = challenge.reset_token_expires_at
+    if token_exp and token_exp.tzinfo is None:
+        token_exp = token_exp.replace(tzinfo=timezone.utc)
+
+    if token_exp and token_exp < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset session has expired. Please request a new verification code."
+        )
+
+    # Retrieve user and update password
+    user_stmt = select(User).where(User.id == challenge.user_id)
+    user = (await db.execute(user_stmt)).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User account not found."
+        )
+
+    user.hashed_password = get_password_hash(reset_in.new_password)
+    challenge.is_used = True
+    await db.commit()
+
+    # Dispatch security confirmation email
+    if user.email:
+        try:
+            await mfa_service.send_password_reset_success_email(
+                recipient_email=user.email,
+                recipient_name=user.full_name
+            )
+        except Exception as e:
+            logger.error(f"Failed to dispatch password reset confirmation email: {e}")
+
+    await record_audit_log(
+        db,
+        user=user.username,
+        action="PASSWORD_RESET_SUCCESS",
+        resource="/api/v1/auth/forgot-password/reset",
+        result="SUCCESS",
+        metadata={"email": mfa_service.mask_email(user.email)}
+    )
+
+    return {
+        "message": "Password has been updated successfully. You may now sign in."
+    }
+

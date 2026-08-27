@@ -58,14 +58,18 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE incidents ADD COLUMN is_synthetic BOOLEAN DEFAULT 0"))
             except Exception:
                 pass  # Column already exists
-            try:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 1"))
-            except Exception:
-                pass  # Column already exists
-            try:
-                await conn.execute(text("ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP"))
-            except Exception:
-                pass  # Column already exists
+            # 3. Add new device classification and telemetry columns if migrating existing SQLite tables
+            for col_sql in [
+                "ALTER TABLE devices ADD COLUMN os_confidence VARCHAR(32) DEFAULT 'Low'",
+                "ALTER TABLE devices ADD COLUMN architecture VARCHAR(32)",
+                "ALTER TABLE devices ADD COLUMN device_type_confidence VARCHAR(32) DEFAULT 'Low'",
+                "ALTER TABLE devices ADD COLUMN open_ports TEXT",
+                "ALTER TABLE devices ADD COLUMN detected_services TEXT",
+            ]:
+                try:
+                    await conn.execute(text(col_sql))
+                except Exception:
+                    pass  # Column already exists
 
             # 4. Clean link-local and virtual adapter duplicate devices
             try:

@@ -7,7 +7,8 @@ import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { 
-  Server, Shield, Activity, Cpu, HardDrive, ArrowLeft, Ban, ShieldAlert, CheckCircle2, Network 
+  Server, Shield, Activity, Cpu, HardDrive, ArrowLeft, Ban, ShieldAlert, CheckCircle2, Network,
+  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle, Radio, Tag, Layers
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -52,6 +53,32 @@ export const DeviceDetails: React.FC = () => {
     disk: h.disk_percent,
   }));
 
+  const getDeviceTypeDisplay = (type?: string) => {
+    const t = (type || 'Unknown').toLowerCase();
+    switch (t) {
+      case 'laptop':
+        return { label: 'Laptop', emoji: '💻', icon: <Laptop size={16} className="text-cyan-400" /> };
+      case 'mobile':
+        return { label: 'Mobile', emoji: '📱', icon: <Smartphone size={16} className="text-emerald-400" /> };
+      case 'desktop':
+      case 'workstation':
+        return { label: 'Desktop', emoji: '🖥', icon: <Monitor size={16} className="text-sky-400" /> };
+      case 'printer':
+        return { label: 'Printer', emoji: '🖨', icon: <Printer size={16} className="text-amber-400" /> };
+      case 'router':
+      case 'firewall':
+        return { label: 'Router', emoji: '📡', icon: <Router size={16} className="text-indigo-400" /> };
+      case 'iot':
+        return { label: 'IoT', emoji: '📺', icon: <Tv size={16} className="text-purple-400" /> };
+      default:
+        return { label: 'Unknown', emoji: '❓', icon: <HelpCircle size={16} className="text-slate-400" /> };
+    }
+  };
+
+  const devTypeInfo = getDeviceTypeDisplay(device.device_type);
+  const openPortsList = Array.isArray(device.open_ports) ? device.open_ports : [];
+  const detectedServicesList = Array.isArray(device.detected_services) ? device.detected_services : [];
+
   return (
     <div className="space-y-6">
       {/* Back Link & Header */}
@@ -63,15 +90,15 @@ export const DeviceDetails: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
-              <Server className="w-6 h-6 text-cyan-400" />
+              {devTypeInfo.icon}
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold font-mono text-slate-100">{device.hostname || device.ip_address}</h1>
+                <h1 className="text-xl font-bold font-mono text-slate-100">{device.hostname || 'Hostname unavailable'}</h1>
                 <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
               </div>
               <div className="text-xs font-mono text-slate-400 mt-0.5">
-                IP: <span className="text-cyan-400">{device.ip_address}</span> | MAC: {device.mac_address || '52:54:00:12:34:01'}
+                IP: <span className="text-cyan-400">{device.ip_address}</span> | MAC: {device.mac_address || 'Unavailable'}
               </div>
             </div>
           </div>
@@ -96,7 +123,7 @@ export const DeviceDetails: React.FC = () => {
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          System Overview & Interfaces
+          System Overview &amp; Specifications
         </button>
         <button
           onClick={() => setActiveTab('health')}
@@ -124,37 +151,136 @@ export const DeviceDetails: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card title="Hardware & Platform Specifications">
-            <div className="space-y-3 text-xs font-mono">
-              <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-                <span className="text-slate-400">Device Type:</span>
-                <span className="text-slate-200 uppercase font-semibold">{device.device_type}</span>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Card 1: Evidence-Based Hardware & Platform Specifications */}
+            <Card title="DEVICE DETAILS &amp; SPECIFICATIONS">
+              <div className="space-y-3 text-xs font-mono">
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Device Name:</span>
+                  <span className="text-slate-200 font-bold">{device.hostname || device.ip_address}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">IP Address:</span>
+                  <span className="text-cyan-400 font-bold">{device.ip_address}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">MAC Address:</span>
+                  <span className="text-slate-200">{device.mac_address || 'Unavailable'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Hostname:</span>
+                  <span className="text-slate-200">{device.hostname || 'Hostname unavailable'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Device Type:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-100 font-bold flex items-center gap-1.5">
+                      <span>{devTypeInfo.emoji}</span>
+                      <span>{devTypeInfo.label}</span>
+                    </span>
+                    <Badge variant={
+                      device.device_type_confidence === 'High' ? 'online' :
+                      device.device_type_confidence === 'Medium' ? 'medium' : 'default'
+                    }>
+                      {device.device_type_confidence || 'Low'} Conf.
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Operating System:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-200">
+                      {device.os_type ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
+                    </span>
+                    {device.os_type && (
+                      <Badge variant={
+                        device.os_confidence === 'High' ? 'online' :
+                        device.os_confidence === 'Medium' ? 'medium' : 'default'
+                      }>
+                        {device.os_confidence || 'Low'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Architecture:</span>
+                  <span className="text-slate-200">{device.architecture || 'Not detected'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Hardware Vendor:</span>
+                  <span className="text-slate-200">{device.vendor || 'Unknown Hardware'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5">
+                  <span className="text-slate-400">Status:</span>
+                  <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
+                </div>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-                <span className="text-slate-400">Operating System:</span>
-                <span className="text-slate-200">{device.os_type} {device.os_version}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-                <span className="text-slate-400">Vendor / Hypervisor:</span>
-                <span className="text-slate-200">{device.vendor || 'Generic Hardware'}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-                <span className="text-slate-400">Monitoring Mode:</span>
-                <span className="text-emerald-400 font-semibold">{device.is_monitored ? 'Active Ingestion' : 'Passive'}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-                <span className="text-slate-400">First Discovered:</span>
-                <span className="text-slate-200">{new Date(device.first_seen).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between py-1.5">
-                <span className="text-slate-400">Last Telemetry Heartbeat:</span>
-                <span className="text-slate-200">{new Date(device.last_seen).toLocaleString()}</span>
-              </div>
-            </div>
-          </Card>
+            </Card>
 
-          <Card title="Network Interfaces">
+            {/* Card 2: Network Ports & Detected Services */}
+            <Card title="DETECTED SERVICES &amp; OPEN PORTS">
+              <div className="space-y-4 text-xs font-mono">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-slate-400 uppercase font-semibold">Open Ports:</span>
+                    <span className="text-cyan-400 font-mono text-[11px]">{openPortsList.length} Active</span>
+                  </div>
+                  {openPortsList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {openPortsList.map((p) => (
+                        <span key={p} className="px-2.5 py-1 bg-cyan-950/80 border border-cyan-800 text-cyan-300 rounded font-mono font-bold text-xs">
+                          Port {p}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-slate-900/60 rounded border border-slate-800 text-slate-500 italic">
+                      None detected (Filtered or closed)
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-slate-400 uppercase font-semibold">Detected Services:</span>
+                    <span className="text-sky-400 font-mono text-[11px]">{detectedServicesList.length} Identified</span>
+                  </div>
+                  {detectedServicesList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {detectedServicesList.map((s, idx) => (
+                        <span key={idx} className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded border border-slate-700 text-xs">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-slate-900/60 rounded border border-slate-800 text-slate-500 italic">
+                      None detected
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400">Monitoring Ingestion:</span>
+                    <span className="text-emerald-400 font-semibold">{device.is_monitored ? 'Active Ingestion' : 'Passive'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400">First Discovered:</span>
+                    <span className="text-slate-300">{new Date(device.first_seen).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400">Last Telemetry Heartbeat:</span>
+                    <span className="text-slate-300">{new Date(device.last_seen).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Network Interfaces Table */}
+          <Card title="Physical &amp; Virtual Network Interfaces">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
                 <thead className="text-slate-400 border-b border-[#1e293b]">
@@ -171,7 +297,7 @@ export const DeviceDetails: React.FC = () => {
                       <tr key={idx}>
                         <td className="py-2.5 font-semibold text-slate-200">{iface.interface_name}</td>
                         <td className="py-2.5 text-cyan-400">{iface.ip_address || device.ip_address}</td>
-                        <td className="py-2.5 text-slate-400">{iface.mac_address || device.mac_address}</td>
+                        <td className="py-2.5 text-slate-400">{iface.mac_address || device.mac_address || '—'}</td>
                         <td className="py-2.5 text-emerald-400 font-semibold">{iface.is_primary ? 'YES' : 'NO'}</td>
                       </tr>
                     ))
@@ -179,7 +305,7 @@ export const DeviceDetails: React.FC = () => {
                     <tr>
                       <td className="py-2.5 font-semibold text-slate-200">eth0</td>
                       <td className="py-2.5 text-cyan-400">{device.ip_address}</td>
-                      <td className="py-2.5 text-slate-400">{device.mac_address}</td>
+                      <td className="py-2.5 text-slate-400">{device.mac_address || '—'}</td>
                       <td className="py-2.5 text-emerald-400 font-semibold">YES</td>
                     </tr>
                   )}

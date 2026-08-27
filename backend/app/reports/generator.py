@@ -34,8 +34,8 @@ class PDFReportGenerator:
     Guarantees strict separation between REAL network telemetry and simulated lab datasets.
     """
 
-    def __init__(self, output_dir: str = "./reports_storage"):
-        self.output_dir = output_dir
+    def __init__(self, output_dir: Optional[str] = None):
+        self.output_dir = output_dir or settings.REPORTS_STORAGE_PATH
         os.makedirs(self.output_dir, exist_ok=True)
 
     async def generate_security_report(

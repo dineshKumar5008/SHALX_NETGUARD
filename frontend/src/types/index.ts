@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'ANALYST' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'SENIOR_ANALYST' | 'ANALYST' | 'VIEWER';
 
 export interface User {
   id: number;
@@ -13,6 +13,32 @@ export interface User {
   last_login?: string;
 }
 
+export interface RegistrationRequest {
+  id: number;
+  full_name: string;
+  username: string;
+  email: string;
+  department: string;
+  reason: string;
+  requested_role: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  created_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  rejection_reason?: string;
+}
+
+export interface RegistrationStatusResponse {
+  id: number;
+  username: string;
+  masked_email: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  created_at: string;
+  reviewed_at?: string;
+  rejection_reason?: string;
+  message: string;
+}
+
 export interface NetworkInterface {
   id?: number;
   interface_name: string;
@@ -20,6 +46,9 @@ export interface NetworkInterface {
   mac_address?: string;
   is_primary: boolean;
 }
+
+export type DeviceType = 'Laptop' | 'Mobile' | 'Desktop' | 'Printer' | 'Router' | 'IoT' | 'Unknown' | 'workstation' | 'server' | 'firewall' | 'switch' | 'soc';
+export type ConfidenceLevel = 'High' | 'Medium' | 'Low';
 
 export interface Device {
   id: number;
@@ -29,13 +58,19 @@ export interface Device {
   vendor?: string;
   os_type?: string;
   os_version?: string;
-  device_type: 'workstation' | 'server' | 'router' | 'firewall' | 'switch' | 'soc';
+  os_confidence?: ConfidenceLevel;
+  architecture?: string;
+  device_type: DeviceType | string;
+  device_type_confidence?: ConfidenceLevel;
+  open_ports?: number[];
+  detected_services?: string[];
   status: 'ONLINE' | 'OFFLINE' | 'WARNING' | 'CRITICAL';
   is_monitored: boolean;
+  is_synthetic?: boolean;
   first_seen: string;
   last_seen: string;
   notes?: string;
-  interfaces: NetworkInterface[];
+  interfaces?: NetworkInterface[];
 }
 
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';

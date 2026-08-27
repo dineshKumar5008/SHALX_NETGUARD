@@ -76,3 +76,30 @@ class DashboardSummary(BaseModel):
     firewall_status: str
     agent_count: int
     development_mode: bool
+
+
+class DiscoveredNodePayload(BaseModel):
+    ip_address: str
+    mac_address: Optional[str] = None
+    hostname: Optional[str] = None
+    vendor: Optional[str] = None
+    os_type: Optional[str] = None
+    os_version: Optional[str] = None
+    os_confidence: Optional[str] = "Low"
+    device_type: Optional[str] = "Unknown"
+    device_type_confidence: Optional[str] = "Low"
+    architecture: Optional[str] = None
+    open_ports: Optional[List[int]] = None
+    detected_services: Optional[List[str]] = None
+    is_gateway: Optional[bool] = False
+    is_local_host: Optional[bool] = False
+    interface_name: Optional[str] = "eth0"
+
+
+class DiscoverySyncPayload(BaseModel):
+    sensor_id: str
+    sensor_hostname: str
+    monitored_subnet: Optional[str] = None
+    gateway_ip: Optional[str] = None
+    devices: List[DiscoveredNodePayload]
+

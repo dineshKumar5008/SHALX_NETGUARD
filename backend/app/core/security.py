@@ -17,6 +17,7 @@ agent_api_key_header = APIKeyHeader(name="X-Agent-Token", auto_error=False)
 
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
+    SENIOR_ANALYST = "SENIOR_ANALYST"
     ANALYST = "ANALYST"
     VIEWER = "VIEWER"
 
