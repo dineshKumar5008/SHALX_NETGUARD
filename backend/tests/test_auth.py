@@ -277,7 +277,7 @@ async def test_auth_smtp_missing_error_handling(async_client: AsyncClient):
             json={"username": "testadmin", "password": "Password123!"}
         )
         assert response.status_code == 503
-        assert "Email delivery is not configured" in response.json()["detail"]
+        assert "not configured" in response.json()["detail"].lower()
     finally:
         settings.SMTP_HOST = original_host
         mfa_service.set_test_mode(True)

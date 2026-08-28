@@ -89,11 +89,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup dynamic discovery notice: {e}")
 
-    # Validate required SMTP email service configuration
-    if settings.SMTP_HOST:
-        logger.info(f"SMTP email service configured. (Host: {settings.SMTP_HOST}:{settings.SMTP_PORT}, Sender: {settings.SMTP_FROM_EMAIL})")
+    # Validate transactional email service configuration
+    if settings.is_email_configured:
+        logger.info(f"Transactional email service configured using provider '{settings.effective_email_provider}' (Sender: {settings.effective_from_email}).")
     else:
-        logger.warning("SMTP email service is not configured.")
+        logger.warning("Transactional email service is not configured. Set RESEND_API_KEY or SMTP credentials in environment.")
 
     # Clean up / reset rate limit state on startup
     try:

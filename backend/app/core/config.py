@@ -160,7 +160,33 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
     
-    # SMTP / Real Email Configuration
+    # Transactional Email Providers (HTTPS API & SMTP)
+    EMAIL_PROVIDER: Optional[str] = Field(
+        default=None,
+        description="Transactional email provider: 'resend', 'brevo', 'sendgrid', or 'smtp'. Auto-detects if None."
+    )
+    RESEND_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Resend API Key (e.g. re_...)"
+    )
+    BREVO_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Brevo (Sendinblue) API Key (e.g. xkeysib-...)"
+    )
+    SENDGRID_API_KEY: Optional[str] = Field(
+        default=None,
+        description="SendGrid API Key (e.g. SG....)"
+    )
+    EMAIL_FROM: Optional[str] = Field(
+        default=None,
+        description="Sender email address override (e.g. 'onboarding@resend.dev' or 'security@yourcompany.com')"
+    )
+    EMAIL_FROM_NAME: Optional[str] = Field(
+        default="SHALX NETGUARD Security",
+        description="Sender display name"
+    )
+
+    # Legacy / Direct SMTP Configuration (Fallback)
     SMTP_HOST: Optional[str] = Field(default=None, description="SMTP server host (e.g. smtp.gmail.com)")
     SMTP_PORT: int = Field(default=587, description="SMTP port (587 for TLS, 465 for SSL)")
     SMTP_USERNAME: Optional[str] = Field(default=None, description="SMTP username / email")
@@ -174,6 +200,46 @@ class Settings(BaseSettings):
     @property
     def effective_smtp_user(self) -> Optional[str]:
         return self.SMTP_USERNAME or self.SMTP_USER
+
+    @property
+    def effective_email_provider(self) -> str:
+        """Resolve active transactional email provider based on explicit config or provided API keys."""
+        if self.EMAIL_PROVIDER:
+            p = self.EMAIL_PROVIDER.strip().lower()
+            if p in ["resend", "brevo", "sendgrid", "smtp"]:
+                return p
+        if self.RESEND_API_KEY:
+            return "resend"
+        if self.BREVO_API_KEY:
+            return "brevo"
+        if self.SENDGRID_API_KEY:
+            return "sendgrid"
+        if self.SMTP_HOST:
+            return "smtp"
+        return "none"
+
+    @property
+    def is_email_configured(self) -> bool:
+        """Returns True if any valid email delivery mechanism (HTTP API or SMTP) is configured."""
+        return self.effective_email_provider != "none"
+
+    @property
+    def effective_from_email(self) -> str:
+        """Resolve sender email address."""
+        if self.EMAIL_FROM and self.EMAIL_FROM.strip():
+            return self.EMAIL_FROM.strip()
+        # Default Resend sandbox sender if Resend is active and no verified custom domain is configured
+        if self.effective_email_provider == "resend":
+            if self.SMTP_FROM_EMAIL and "@" in self.SMTP_FROM_EMAIL and not self.SMTP_FROM_EMAIL.endswith("netguard.local"):
+                return self.SMTP_FROM_EMAIL.strip()
+            return "onboarding@resend.dev"
+        if self.SMTP_FROM_EMAIL and self.SMTP_FROM_EMAIL.strip():
+            return self.SMTP_FROM_EMAIL.strip()
+        return "onboarding@resend.dev"
+
+    @property
+    def effective_from_name(self) -> str:
+        return self.EMAIL_FROM_NAME or self.SMTP_FROM_NAME or "SHALX NETGUARD Security"
 
     # Health Thresholds
     CPU_WARNING_THRESHOLD: float = 70.0

@@ -3,6 +3,7 @@ import secrets
 import smtplib
 import asyncio
 import logging
+import httpx
 from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -16,9 +17,10 @@ logger = logging.getLogger("netguard.services.mfa")
 
 class MFAService:
     """
-    Cryptographically secure Multi-Factor Authentication (MFA) service.
-    Generates dynamic random 6-digit OTPs, securely hashes them, and delivers them via real SMTP email.
-    Plaintext OTPs are NEVER hardcoded, NEVER logged, and NEVER returned from APIs.
+    Cryptographically secure Multi-Factor Authentication (MFA) & Transactional Email Service.
+    Supports modern HTTPS REST API delivery (Resend, Brevo, SendGrid) and legacy SMTP TCP delivery.
+    Generates dynamic random 6-digit OTPs, securely hashes them, and delivers them via real email.
+    Plaintext OTPs, API keys, and credentials are NEVER hardcoded, NEVER logged, and NEVER returned from APIs.
     """
 
     _test_inbox: Dict[str, str] = {}
@@ -120,6 +122,261 @@ class MFAService:
         return f"{masked_user}@{domain_part}"
 
     @classmethod
+    async def _send_resend(
+        cls,
+        recipient_email: str,
+        subject: str,
+        text_body: str,
+        html_body: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """Deliver transactional email via Resend HTTPS REST API."""
+        api_key = (settings.RESEND_API_KEY or "").strip()
+        if not api_key:
+            return False, "RESEND_API_KEY is not configured."
+
+        from_email = settings.effective_from_email
+        from_name = settings.effective_from_name
+        from_header = f"{from_name} <{from_email}>" if "@" in from_email and "<" not in from_email else from_email
+
+        payload: Dict[str, Any] = {
+            "from": from_header,
+            "to": [recipient_email],
+            "subject": subject,
+            "text": text_body,
+        }
+        if html_body:
+            payload["html"] = html_body
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "SHALX-NetGuard-SOC/1.0"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.post("https://api.resend.com/emails", json=payload, headers=headers)
+                if res.status_code in [200, 201]:
+                    logger.info(f"Email '{subject}' successfully dispatched via Resend HTTP API to {cls.mask_email(recipient_email)}")
+                    return True, None
+
+                err_detail = "Unknown error"
+                try:
+                    err_json = res.json()
+                    err_detail = err_json.get("message") or err_json.get("name") or str(err_json)
+                except Exception:
+                    err_detail = res.text[:200]
+
+                logger.error(f"Resend HTTP API delivery failure ({res.status_code}) to {cls.mask_email(recipient_email)}: {err_detail}")
+                return False, f"Resend API error ({res.status_code}): {err_detail}"
+        except httpx.RequestError as e:
+            logger.error(f"Resend HTTP connection error to {cls.mask_email(recipient_email)}: {e}")
+            return False, f"Resend API connection error: {str(e)}"
+
+    @classmethod
+    async def _send_brevo(
+        cls,
+        recipient_email: str,
+        subject: str,
+        text_body: str,
+        html_body: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """Deliver transactional email via Brevo (Sendinblue) HTTPS REST API."""
+        api_key = (settings.BREVO_API_KEY or "").strip()
+        if not api_key:
+            return False, "BREVO_API_KEY is not configured."
+
+        from_email = settings.effective_from_email
+        from_name = settings.effective_from_name
+
+        payload: Dict[str, Any] = {
+            "sender": {"email": from_email, "name": from_name},
+            "to": [{"email": recipient_email}],
+            "subject": subject,
+            "textContent": text_body,
+        }
+        if html_body:
+            payload["htmlContent"] = html_body
+
+        headers = {
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "User-Agent": "SHALX-NetGuard-SOC/1.0"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.post("https://api.brevo.com/v3/smtp/email", json=payload, headers=headers)
+                if res.status_code in [200, 201, 202]:
+                    logger.info(f"Email '{subject}' successfully dispatched via Brevo HTTP API to {cls.mask_email(recipient_email)}")
+                    return True, None
+
+                err_detail = "Unknown error"
+                try:
+                    err_json = res.json()
+                    err_detail = err_json.get("message") or str(err_json)
+                except Exception:
+                    err_detail = res.text[:200]
+
+                logger.error(f"Brevo HTTP API delivery failure ({res.status_code}) to {cls.mask_email(recipient_email)}: {err_detail}")
+                return False, f"Brevo API error ({res.status_code}): {err_detail}"
+        except httpx.RequestError as e:
+            logger.error(f"Brevo HTTP connection error to {cls.mask_email(recipient_email)}: {e}")
+            return False, f"Brevo API connection error: {str(e)}"
+
+    @classmethod
+    async def _send_sendgrid(
+        cls,
+        recipient_email: str,
+        subject: str,
+        text_body: str,
+        html_body: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """Deliver transactional email via SendGrid HTTPS REST API."""
+        api_key = (settings.SENDGRID_API_KEY or "").strip()
+        if not api_key:
+            return False, "SENDGRID_API_KEY is not configured."
+
+        from_email = settings.effective_from_email
+        from_name = settings.effective_from_name
+
+        content = [{"type": "text/plain", "value": text_body}]
+        if html_body:
+            content.append({"type": "text/html", "value": html_body})
+
+        payload = {
+            "personalizations": [{"to": [{"email": recipient_email}]}],
+            "from": {"email": from_email, "name": from_name},
+            "subject": subject,
+            "content": content
+        }
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "SHALX-NetGuard-SOC/1.0"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.post("https://api.sendgrid.com/v3/mail/send", json=payload, headers=headers)
+                if res.status_code in [200, 201, 202]:
+                    logger.info(f"Email '{subject}' successfully dispatched via SendGrid HTTP API to {cls.mask_email(recipient_email)}")
+                    return True, None
+
+                err_detail = "Unknown error"
+                try:
+                    err_json = res.json()
+                    errors = err_json.get("errors", [])
+                    err_detail = errors[0].get("message") if errors else str(err_json)
+                except Exception:
+                    err_detail = res.text[:200]
+
+                logger.error(f"SendGrid HTTP API delivery failure ({res.status_code}) to {cls.mask_email(recipient_email)}: {err_detail}")
+                return False, f"SendGrid API error ({res.status_code}): {err_detail}"
+        except httpx.RequestError as e:
+            logger.error(f"SendGrid HTTP connection error to {cls.mask_email(recipient_email)}: {e}")
+            return False, f"SendGrid API connection error: {str(e)}"
+
+    @classmethod
+    async def _send_smtp(
+        cls,
+        recipient_email: str,
+        subject: str,
+        text_body: str,
+        html_body: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """Deliver transactional email via raw SMTP TCP connection."""
+        from_name = settings.effective_from_name
+        from_email = settings.effective_from_email
+
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"{from_name} <{from_email}>"
+        msg["To"] = recipient_email
+        msg["Subject"] = subject
+
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        if html_body:
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+        def _send_sync():
+            smtp_host = settings.SMTP_HOST
+            smtp_port = settings.SMTP_PORT
+            smtp_user = settings.effective_smtp_user
+            smtp_pass = settings.SMTP_PASSWORD
+
+            if not smtp_host:
+                logger.warning(f"SMTP is not configured. Unable to deliver email '{subject}' to {cls.mask_email(recipient_email)}.")
+                return False, "SMTP is not configured."
+
+            try:
+                if settings.SMTP_USE_SSL:
+                    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12)
+                else:
+                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
+
+                with server:
+                    if settings.SMTP_USE_TLS and not settings.SMTP_USE_SSL:
+                        server.starttls()
+                    if smtp_user and smtp_pass:
+                        server.login(smtp_user, smtp_pass)
+                    server.sendmail(from_email, [recipient_email], msg.as_string())
+
+                logger.info(f"Email '{subject}' successfully dispatched via SMTP to {cls.mask_email(recipient_email)}")
+                return True, None
+            except smtplib.SMTPRecipientsRefused as e:
+                logger.error(f"SMTP recipient rejected for {cls.mask_email(recipient_email)}: {e}")
+                return False, "Recipient address rejected by mail server (mailbox not found)."
+            except smtplib.SMTPAuthenticationError as e:
+                logger.error(f"SMTP authentication failure for server {smtp_host}: {e}")
+                return False, "SMTP server authentication failed."
+            except Exception as e:
+                logger.error(f"SMTP delivery error for '{subject}' to {cls.mask_email(recipient_email)}: {e}")
+                return False, f"Failed to send email via SMTP: {str(e)}"
+
+        return await asyncio.to_thread(_send_sync)
+
+    @classmethod
+    async def _dispatch_email(
+        cls,
+        recipient_email: str,
+        subject: str,
+        text_body: str,
+        html_body: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Unified transactional email dispatcher.
+        Delivers email via configured HTTP/HTTPS API provider (Resend, Brevo, SendGrid) or legacy SMTP.
+        """
+        cls._test_notifications.append({
+            "to": recipient_email,
+            "subject": subject,
+            "text": text_body
+        })
+
+        if not recipient_email or "@" not in recipient_email:
+            return False, "Invalid recipient email address"
+
+        # If running in simulated test mode or testing environment, complete delivery successfully
+        if cls._test_mode or settings.ENVIRONMENT == "testing":
+            return True, None
+
+        provider = settings.effective_email_provider
+        masked = cls.mask_email(recipient_email)
+
+        if provider == "resend":
+            return await cls._send_resend(recipient_email, subject, text_body, html_body)
+        elif provider == "brevo":
+            return await cls._send_brevo(recipient_email, subject, text_body, html_body)
+        elif provider == "sendgrid":
+            return await cls._send_sendgrid(recipient_email, subject, text_body, html_body)
+        elif provider == "smtp":
+            return await cls._send_smtp(recipient_email, subject, text_body, html_body)
+        else:
+            logger.warning(f"No email provider configured. Unable to send '{subject}' to {masked}.")
+            return False, "Transactional email service is not configured on the server. Please set RESEND_API_KEY (or SMTP credentials) in Render environment variables."
+
+    @classmethod
     async def send_otp_email(
         cls,
         recipient_email: str,
@@ -127,8 +384,7 @@ class MFAService:
         recipient_name: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
         """
-        Dispatch the dynamic 6-digit OTP to the user's verified registered email address via SMTP.
-        Executes delivery in a background thread to prevent blocking asynchronous event loop.
+        Dispatch the dynamic 6-digit OTP to the user's verified registered email address.
         """
         cls._test_inbox[recipient_email] = otp
         if not recipient_email or "@" not in recipient_email:
@@ -137,7 +393,7 @@ class MFAService:
         subject = "SHALX NETGUARD — Login Verification Code"
         name_display = recipient_name or "Security Operator"
 
-        # 1. Plain text format (Exact match for requested specification)
+        # 1. Plain text format
         text_body = f"""SHALX NETGUARD
 
 Your login verification code is:
@@ -263,62 +519,7 @@ If you did not attempt to log in, please secure your account.
         </html>
         """
 
-        msg = MIMEMultipart("alternative")
-        from_name = settings.SMTP_FROM_NAME
-        from_email = settings.SMTP_FROM_EMAIL
-        msg["From"] = f"{from_name} <{from_email}>"
-        msg["To"] = recipient_email
-        msg["Subject"] = subject
-
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-        msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-        def _send_sync():
-            # If running in test mode, complete simulated delivery without network SMTP call
-            if cls._test_mode or settings.ENVIRONMENT == "testing":
-                return True, None
-
-            smtp_host = settings.SMTP_HOST
-            smtp_port = settings.SMTP_PORT
-            smtp_user = settings.effective_smtp_user
-            smtp_pass = settings.SMTP_PASSWORD
-
-            if not smtp_host:
-                logger.warning(
-                    f"SMTP email service is not configured. Unable to deliver verification email to {cls.mask_email(recipient_email)}."
-                )
-                return False, "Email delivery is not configured."
-
-            try:
-                if settings.SMTP_USE_SSL:
-                    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12)
-                else:
-                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
-
-                with server:
-                    if settings.SMTP_USE_TLS and not settings.SMTP_USE_SSL:
-                        server.starttls()
-                    if smtp_user and smtp_pass:
-                        server.login(smtp_user, smtp_pass)
-                    
-                    server.sendmail(from_email, [recipient_email], msg.as_string())
-                    
-                logger.info(f"Dynamic MFA verification code successfully dispatched via SMTP to {cls.mask_email(recipient_email)}")
-                return True, None
-            except smtplib.SMTPRecipientsRefused as e:
-                logger.error(f"SMTP recipient rejected (invalid/non-existent mailbox) for {cls.mask_email(recipient_email)}: {e}")
-                return False, "Recipient address rejected by mail server (mailbox not found)."
-            except smtplib.SMTPResponseException as e:
-                logger.error(f"SMTP response error ({e.smtp_code}) for {cls.mask_email(recipient_email)}: {e.smtp_error}")
-                return False, f"SMTP server rejected message (code {e.smtp_code})."
-            except smtplib.SMTPAuthenticationError as e:
-                logger.error(f"SMTP authentication failure for server {smtp_host}: {e}")
-                return False, "SMTP server authentication failed."
-            except Exception as e:
-                logger.error(f"SMTP delivery error to {cls.mask_email(recipient_email)}: {e}")
-                return False, f"Failed to send email: {str(e)}"
-
-        return await asyncio.to_thread(_send_sync)
+        return await cls._dispatch_email(recipient_email, subject, text_body, html_body)
 
     @classmethod
     async def send_generic_email(
@@ -329,61 +530,9 @@ If you did not attempt to log in, please secure your account.
         html_body: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
         """
-        Generic helper to send an email notification through configured SMTP.
+        Generic helper to send an email notification through the active provider.
         """
-        cls._test_notifications.append({
-            "to": recipient_email,
-            "subject": subject,
-            "text": text_body
-        })
-
-        if not recipient_email or "@" not in recipient_email:
-            return False, "Invalid recipient email address"
-
-        msg = MIMEMultipart("alternative")
-        from_name = settings.SMTP_FROM_NAME
-        from_email = settings.SMTP_FROM_EMAIL
-        msg["From"] = f"{from_name} <{from_email}>"
-        msg["To"] = recipient_email
-        msg["Subject"] = subject
-
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-        if html_body:
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-        def _send_sync():
-            if cls._test_mode or settings.ENVIRONMENT == "testing":
-                return True, None
-
-            smtp_host = settings.SMTP_HOST
-            smtp_port = settings.SMTP_PORT
-            smtp_user = settings.effective_smtp_user
-            smtp_pass = settings.SMTP_PASSWORD
-
-            if not smtp_host:
-                logger.warning(f"SMTP is not configured. Unable to deliver email '{subject}' to {cls.mask_email(recipient_email)}.")
-                return False, "Email delivery is not configured."
-
-            try:
-                if settings.SMTP_USE_SSL:
-                    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12)
-                else:
-                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
-
-                with server:
-                    if settings.SMTP_USE_TLS and not settings.SMTP_USE_SSL:
-                        server.starttls()
-                    if smtp_user and smtp_pass:
-                        server.login(smtp_user, smtp_pass)
-                    server.sendmail(from_email, [recipient_email], msg.as_string())
-
-                logger.info(f"Email '{subject}' successfully dispatched via SMTP to {cls.mask_email(recipient_email)}")
-                return True, None
-            except Exception as e:
-                logger.error(f"SMTP delivery error for '{subject}' to {cls.mask_email(recipient_email)}: {e}")
-                return False, f"Failed to send email: {str(e)}"
-
-        return await asyncio.to_thread(_send_sync)
+        return await cls._dispatch_email(recipient_email, subject, text_body, html_body)
 
     @classmethod
     async def send_registration_submitted_admin_notification(

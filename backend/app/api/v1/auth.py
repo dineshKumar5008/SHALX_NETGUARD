@@ -204,13 +204,13 @@ async def login(
     )
 
     if not email_sent:
-        logger.warning(f"SMTP dispatch failure for {masked_email}: {email_err}")
+        logger.warning(f"Email dispatch failure for {masked_email}: {email_err}")
         challenge.is_used = True
         await db.commit()
-        if not settings.SMTP_HOST:
+        if not settings.is_email_configured:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery is not configured on the server. Please configure SMTP_HOST and credentials in Render environment variables."
+                detail="Email delivery service is not configured on the server. Please configure RESEND_API_KEY (or SMTP credentials) in Render environment variables."
             )
         else:
             raise HTTPException(
@@ -444,18 +444,18 @@ async def resend_mfa(
     )
 
     if not email_sent:
-        logger.warning(f"Resend SMTP dispatch failure for {masked_email}: {email_err}")
+        logger.warning(f"Resend email dispatch failure for {masked_email}: {email_err}")
         new_challenge.is_used = True
         await db.commit()
-        if not settings.SMTP_HOST:
+        if not settings.is_email_configured:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery is not configured. Please configure SMTP settings in .env or contact the administrator."
+                detail="Email delivery service is not configured on the server. Please configure RESEND_API_KEY (or SMTP credentials) in Render environment variables."
             )
         else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to send verification code. Please contact the administrator."
+                detail=f"Unable to send verification code email: {email_err}"
             )
 
     await record_audit_log(
@@ -823,10 +823,10 @@ async def forgot_password_request(
             detail="Please enter a valid real email address."
         )
 
-    if not settings.SMTP_HOST and not mfa_service._test_mode and settings.ENVIRONMENT != "testing":
+    if not settings.is_email_configured and not mfa_service._test_mode and settings.ENVIRONMENT != "testing":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Email delivery service is not configured on the server. Please configure SMTP settings in Render environment variables."
+            detail="Email delivery service is not configured on the server. Please configure RESEND_API_KEY (or SMTP credentials) in Render environment variables."
         )
 
     stmt = select(User).where(func.lower(User.email) == clean_email)
@@ -1044,10 +1044,10 @@ async def forgot_password_resend(
     )
 
     if not sent_ok:
-        if not settings.SMTP_HOST:
+        if not settings.is_email_configured:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery service is not configured on the server."
+                detail="Email delivery service is not configured on the server. Please configure RESEND_API_KEY (or SMTP credentials) in Render environment variables."
             )
         else:
             raise HTTPException(
