@@ -71,15 +71,53 @@ async def login(
             detail="Username and password are required"
         )
 
-    # 1. Look up user by username or registered email
-    stmt = select(User).where((User.username == username) | (User.email == username))
+    clean_username = username.strip()
+    clean_lower = clean_username.lower()
+
+    # 1. Look up user by username or registered email (case-insensitive)
+    stmt = select(User).where(
+        (func.lower(User.username) == clean_lower) | (func.lower(User.email) == clean_lower)
+    )
     result = await db.execute(stmt)
     user = result.scalars().first()
 
-    if not user or not verify_password(password, user.hashed_password):
+    if not user:
+        # Check if user has a pending or rejected registration request
+        stmt_reg = select(RegistrationRequest).where(
+            (func.lower(RegistrationRequest.username) == clean_lower) | (func.lower(RegistrationRequest.email) == clean_lower)
+        ).order_by(RegistrationRequest.created_at.desc())
+        pending_req = (await db.execute(stmt_reg)).scalars().first()
+
+        if pending_req:
+            if pending_req.status == "PENDING":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your registration request is currently pending approval by an administrator. You will be able to log in once approved."
+                )
+            elif pending_req.status == "REJECTED":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Your registration request was rejected: {pending_req.rejection_reason or 'Access denied'}."
+                )
+
         await record_audit_log(
             db,
-            user=username,
+            user=clean_username,
+            action="LOGIN_FAILED",
+            resource="/api/v1/auth/login",
+            result="DENIED",
+            metadata={"reason": "User not found", "ip": request.client.host if request.client else None}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not verify_password(password, user.hashed_password):
+        await record_audit_log(
+            db,
+            user=clean_username,
             action="LOGIN_FAILED",
             resource="/api/v1/auth/login",
             result="DENIED",
@@ -110,7 +148,7 @@ async def login(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Your account does not have a verified real email configured for MFA delivery. Please configure your registered email (e.g. set ADMIN_EMAIL in .env or run setup) before logging in."
+            detail="Your account does not have a verified real email configured for MFA delivery. Please configure your registered email (e.g. set ADMIN_EMAIL in Render environment variables or run setup) before logging in."
         )
 
     now = datetime.now(timezone.utc)
@@ -172,12 +210,12 @@ async def login(
         if not settings.SMTP_HOST:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery is not configured. Please configure SMTP settings in .env or contact the administrator."
+                detail="Email delivery is not configured on the server. Please configure SMTP_HOST and credentials in Render environment variables."
             )
         else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to send verification code. Please contact the administrator."
+                detail=f"Unable to send verification code email: {email_err}"
             )
 
     await record_audit_log(
@@ -778,12 +816,25 @@ async def forgot_password_request(
     4. Delivers verification code to user's registered email via SMTP.
     """
     clean_email = req_in.email.strip().lower()
+
+    if not mfa_service.is_valid_production_email(clean_email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please enter a valid real email address."
+        )
+
+    if not settings.SMTP_HOST and not mfa_service._test_mode and settings.ENVIRONMENT != "testing":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email delivery service is not configured on the server. Please configure SMTP settings in Render environment variables."
+        )
+
     stmt = select(User).where(func.lower(User.email) == clean_email)
     user = (await db.execute(stmt)).scalars().first()
 
     now = datetime.now(timezone.utc)
 
-    if user and user.is_active and mfa_service.is_valid_production_email(user.email):
+    if user and user.is_active:
         # Rate limiting: max 5 requests per 10 minutes per user
         ten_mins_ago = now - timedelta(minutes=10)
         recent_stmt = select(func.count(PasswordResetChallenge.id)).where(
@@ -832,7 +883,13 @@ async def forgot_password_request(
         )
 
         if not sent_ok:
-            logger.warning(f"Password reset OTP SMTP delivery notice for {mfa_service.mask_email(user.email)}: {send_err}")
+            logger.error(f"Password reset OTP SMTP delivery failed for {mfa_service.mask_email(user.email)}: {send_err}")
+            challenge.is_used = True
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unable to send verification code email: {send_err}"
+            )
 
         await record_audit_log(
             db,
@@ -850,6 +907,18 @@ async def forgot_password_request(
             expires_in=600
         )
     else:
+        # Check if there is a pending registration request for this email
+        stmt_pending = select(RegistrationRequest).where(
+            func.lower(RegistrationRequest.email) == clean_email
+        ).order_by(RegistrationRequest.created_at.desc())
+        pending_req = (await db.execute(stmt_pending)).scalars().first()
+
+        if pending_req and pending_req.status == "PENDING":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A registration request for this email is currently pending administrator approval. Please wait for your account to be approved before resetting your password."
+            )
+
         # Anti-enumeration response: Generic message even if user does not exist
         return ForgotPasswordResponse(
             message="If the email address is registered, a verification code has been sent.",
@@ -973,6 +1042,18 @@ async def forgot_password_resend(
         otp=new_otp,
         recipient_name=user.full_name
     )
+
+    if not sent_ok:
+        if not settings.SMTP_HOST:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email delivery service is not configured on the server."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unable to resend verification code email: {send_err}"
+            )
 
     return {
         "message": "A new verification code has been dispatched to your registered email.",

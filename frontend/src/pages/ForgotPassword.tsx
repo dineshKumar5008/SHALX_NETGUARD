@@ -84,7 +84,14 @@ export const ForgotPassword: React.FC = () => {
       setStep(2);
       setSuccessMessage(res.data.message || 'If the email is registered, a verification code has been sent.');
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.detail || 'Failed to request password reset code. Please try again.');
+      const data = err.response?.data;
+      if (typeof data?.detail === 'string') {
+        setErrorMessage(data.detail);
+      } else if (err.message && !err.response) {
+        setErrorMessage(`Network error: ${err.message}. Please verify the backend server is reachable.`);
+      } else {
+        setErrorMessage(data?.message || err.message || 'Failed to request password reset code. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +124,8 @@ export const ForgotPassword: React.FC = () => {
       setStep(3);
       setSuccessMessage('Identity verified successfully. You may now create your new password.');
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.detail || 'Invalid or expired verification code. Please try again.');
+      const data = err.response?.data;
+      setErrorMessage(data?.detail || data?.message || 'Invalid or expired verification code. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +149,8 @@ export const ForgotPassword: React.FC = () => {
       setOtpCode('');
       setSuccessMessage(res.data.message || 'A new verification code has been dispatched.');
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.detail || 'Failed to resend code. Please request a new session.');
+      const data = err.response?.data;
+      setErrorMessage(data?.detail || data?.message || 'Failed to resend code. Please request a new session.');
     } finally {
       setIsResending(false);
     }
@@ -179,7 +188,8 @@ export const ForgotPassword: React.FC = () => {
       setStep(4);
       setSuccessMessage(res.data.message || 'Password has been updated successfully.');
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.detail || 'Failed to reset password. Please restart the recovery flow.');
+      const data = err.response?.data;
+      setErrorMessage(data?.detail || data?.message || 'Failed to reset password. Please restart the recovery flow.');
     } finally {
       setIsLoading(false);
     }

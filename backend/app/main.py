@@ -25,7 +25,7 @@ async def ensure_default_admin():
     """Ensure baseline administrator and user accounts exist on startup with real configured emails."""
     async with AsyncSessionLocal() as db:
         # 1. Admin account initialization or sync with configured ADMIN_EMAIL
-        admin_email = settings.ADMIN_EMAIL or ""
+        admin_email = (settings.ADMIN_EMAIL or "").strip()
         admin_stmt = select(User).where(User.username == "admin")
         res = await db.execute(admin_stmt)
         admin = res.scalars().first()
@@ -33,7 +33,7 @@ async def ensure_default_admin():
             logger.info("Seeding baseline administrator account (admin)...")
             admin_user = User(
                 username="admin",
-                email=admin_email,
+                email=admin_email if mfa_service.is_valid_production_email(admin_email) else None,
                 full_name="SOC Administrator",
                 hashed_password=get_password_hash("NetGuard@2026!"),
                 role="ADMIN",
@@ -41,10 +41,17 @@ async def ensure_default_admin():
             )
             db.add(admin_user)
         else:
-            # If ADMIN_EMAIL is configured in environment/.env, sync it into the database
-            if settings.ADMIN_EMAIL and admin.email != settings.ADMIN_EMAIL:
-                logger.info(f"Syncing administrator registered email to: {settings.ADMIN_EMAIL}")
-                admin.email = settings.ADMIN_EMAIL
+            # If ADMIN_EMAIL is configured in environment, sync it into the database
+            if admin_email and mfa_service.is_valid_production_email(admin_email) and admin.email != admin_email:
+                logger.info(f"Syncing administrator registered email to: {admin_email}")
+                admin.email = admin_email
+            elif not admin.email and settings.SMTP_FROM_EMAIL and mfa_service.is_valid_production_email(settings.SMTP_FROM_EMAIL):
+                logger.info(f"Setting administrator registered email from SMTP sender: {settings.SMTP_FROM_EMAIL}")
+                admin.email = settings.SMTP_FROM_EMAIL
+
+            # Ensure admin password hash is valid
+            if not admin.hashed_password or not admin.hashed_password.startswith("$2b$"):
+                admin.hashed_password = get_password_hash("NetGuard@2026!")
 
         # 2. Analyst and Viewer accounts
         for u_name, full_name, raw_pass, role in [

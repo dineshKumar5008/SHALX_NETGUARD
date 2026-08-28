@@ -48,12 +48,13 @@ async def test_registration_submission_creates_pending_request(async_client: Asy
         user = (await session.execute(select(User).where(User.username == "mvance"))).scalars().first()
         assert user is None
 
-    # Verify applicant CANNOT log in while PENDING
+    # Verify applicant CANNOT log in while PENDING (returns 403 with pending status message)
     login_resp = await async_client.post(
         "/api/v1/auth/login",
         json={"username": "mvance", "password": "SecurePassword2026!"}
     )
-    assert login_resp.status_code == 401
+    assert login_resp.status_code == 403
+    assert "pending approval" in login_resp.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -270,12 +271,13 @@ async def test_registration_rejection_requires_reason(async_client: AsyncClient)
     assert rej_data["rejection_reason"] == "External vendors must use partner portal."
     assert rej_data["reviewed_by"] == "testadmin"
 
-    # 5. Rejected user attempts login -> must fail
+    # 5. Rejected user attempts login -> must fail with 403 rejection message
     login_attempt = await async_client.post(
         "/api/v1/auth/login",
         json={"username": "rejecteduser", "password": "Password123!"}
     )
-    assert login_attempt.status_code == 401
+    assert login_attempt.status_code == 403
+    assert "rejected" in login_attempt.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

@@ -98,7 +98,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: false, error: 'Unexpected server response format' };
     } catch (error: any) {
-      const errMsg = error.response?.data?.detail || 'Invalid username or password. Please verify credentials.';
+      const data = error.response?.data;
+      const errMsg = data?.detail || data?.message || (error.message && !error.response ? `Network error: ${error.message}` : 'Invalid username or password. Please verify credentials.');
       return { success: false, error: errMsg };
     }
   };
@@ -126,7 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('netguard_user', JSON.stringify(userRes.data));
       return { success: true };
     } catch (error: any) {
-      const errMsg = error.response?.data?.detail || 'Verification failed. Please check your OTP.';
+      const data = error.response?.data;
+      const errMsg = data?.detail || data?.message || (error.message && !error.response ? `Network error: ${error.message}` : 'Verification failed. Please check your OTP.');
       return { success: false, error: errMsg };
     }
   };
@@ -145,7 +147,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         message: res.data.message
       };
     } catch (error: any) {
-      const errMsg = error.response?.data?.detail || 'Failed to resend verification code. Please try again.';
+      const data = error.response?.data;
+      const errMsg = data?.detail || data?.message || (error.message && !error.response ? `Network error: ${error.message}` : 'Failed to resend verification code. Please try again.');
       return { success: false, error: errMsg };
     }
   };
