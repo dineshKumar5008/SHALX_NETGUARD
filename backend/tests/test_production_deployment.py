@@ -47,6 +47,23 @@ def test_dynamic_cors_origins():
 
 
 @pytest.mark.asyncio
+async def test_render_cors_options_preflight(async_client: AsyncClient):
+    """Verify that OPTIONS preflight from Render frontend domain returns 200 with CORS headers."""
+    res = await async_client.options(
+        "/api/v1/auth/register",
+        headers={
+            "Origin": "https://netguard-frontend-lgxp.onrender.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type"
+        }
+    )
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == "https://netguard-frontend-lgxp.onrender.com"
+    assert "content-type" in res.headers.get("access-control-allow-headers", "").lower()
+
+
+
+@pytest.mark.asyncio
 async def test_remote_sensor_discovery_sync_flow(async_client: AsyncClient):
     """Test remote network sensor telemetry ingestion into cloud backend."""
     sync_payload = {

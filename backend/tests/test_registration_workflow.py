@@ -101,7 +101,7 @@ async def test_registration_duplicate_username_and_email_rejected(async_client: 
         }
     )
     assert dup_admin.status_code == 400
-    assert "already exists" in dup_admin.json()["detail"]
+    assert "already registered" in dup_admin.json()["detail"]
 
     # 2. Duplicate existing active user email
     dup_email = await async_client.post(
@@ -117,7 +117,7 @@ async def test_registration_duplicate_username_and_email_rejected(async_client: 
         }
     )
     assert dup_email.status_code == 400
-    assert "already exists" in dup_email.json()["detail"]
+    assert "already registered" in dup_email.json()["detail"]
 
 
 @pytest.mark.asyncio

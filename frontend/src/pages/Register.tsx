@@ -66,13 +66,17 @@ export const Register: React.FC = () => {
         navigate('/login');
       }
     } catch (err: any) {
-      const detail = err.response?.data?.detail;
-      if (typeof detail === 'string') {
-        setErrorMessage(detail);
-      } else if (Array.isArray(detail)) {
-        setErrorMessage(detail[0]?.msg || 'Validation failed. Please check form fields.');
+      const data = err.response?.data;
+      if (typeof data?.detail === 'string') {
+        setErrorMessage(data.detail);
+      } else if (Array.isArray(data?.detail)) {
+        setErrorMessage(data.detail.map((d: any) => d?.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof data?.message === 'string') {
+        setErrorMessage(data.message);
+      } else if (err.message && !err.response) {
+        setErrorMessage(`Network error: ${err.message}. Please verify the backend server is online and reachable.`);
       } else {
-        setErrorMessage('Failed to submit registration request. Please try again.');
+        setErrorMessage(err.message || 'Failed to submit registration request. Please try again.');
       }
     } finally {
       setIsLoading(false);

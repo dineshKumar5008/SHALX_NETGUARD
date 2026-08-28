@@ -626,10 +626,16 @@ async def submit_registration_request(
     )
     existing_user = (await db.execute(stmt_user)).scalars().first()
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account or registration request already exists for these details."
-        )
+        if existing_user.username.lower() == clean_username.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username is already registered. Please choose a different username or log in."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this email address is already registered. Please log in or use Forgot Password."
+            )
 
     # Check for duplicate pending registration request
     stmt_pending = select(RegistrationRequest).where(
@@ -638,10 +644,16 @@ async def submit_registration_request(
     )
     existing_pending = (await db.execute(stmt_pending)).scalars().first()
     if existing_pending:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account or registration request already exists for these details."
-        )
+        if existing_pending.username.lower() == clean_username.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A pending registration request already exists for this username. Please wait for administrator approval."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A pending registration request already exists for this email address. Please wait for administrator approval."
+            )
 
     hashed_pw = get_password_hash(payload.password)
     now = datetime.now(timezone.utc)

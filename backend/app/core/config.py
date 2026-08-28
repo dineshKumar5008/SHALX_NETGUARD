@@ -53,6 +53,10 @@ class Settings(BaseSettings):
         default=None,
         description="Comma-separated additional allowed CORS origins"
     )
+    CORS_ORIGIN_REGEX: Optional[str] = Field(
+        default=r"^https:\/\/.*\.onrender\.com$",
+        description="Regex pattern for dynamic allowed CORS origins (e.g. Render deployments)"
+    )
 
     # Storage
     REPORTS_STORAGE_PATH: str = Field(
@@ -92,16 +96,35 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         """Dynamically compute allowed CORS origins from defaults and environment variables."""
         origins = list(self.BACKEND_CORS_ORIGINS)
+        
+        # Include deployed frontend & backend known hostnames
+        known_defaults = [
+            "https://netguard-frontend-lgxp.onrender.com",
+            "https://netguard-backend-9ozq.onrender.com",
+        ]
+        for kd in known_defaults:
+            if kd not in origins:
+                origins.append(kd)
+
         if self.FRONTEND_URL:
             clean_fe = self.FRONTEND_URL.strip().rstrip("/")
-            if clean_fe and clean_fe not in origins:
-                origins.append(clean_fe)
+            if clean_fe:
+                if clean_fe not in origins:
+                    origins.append(clean_fe)
+                if not clean_fe.startswith("http://") and not clean_fe.startswith("https://"):
+                    origins.append(f"https://{clean_fe}")
+                    origins.append(f"http://{clean_fe}")
         if self.CORS_ORIGINS:
             for item in self.CORS_ORIGINS.split(","):
                 clean_item = item.strip().rstrip("/")
-                if clean_item and clean_item not in origins:
-                    origins.append(clean_item)
+                if clean_item:
+                    if clean_item not in origins:
+                        origins.append(clean_item)
+                    if not clean_item.startswith("http://") and not clean_item.startswith("https://"):
+                        origins.append(f"https://{clean_item}")
+                        origins.append(f"http://{clean_item}")
         return origins
+
 
 
     # Monitored Networks (CIDRs) - Defaults to empty so discovery dynamically inspects active host interface subnets
