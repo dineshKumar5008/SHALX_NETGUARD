@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import apiClient from '../api/client';
-import { Device, Alert, HealthMetric } from '../types';
+import { Device, Alert, HealthMetric, DeviceActivity } from '../types';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { 
   Server, Shield, Activity, Cpu, HardDrive, ArrowLeft, Ban, ShieldAlert, CheckCircle2, Network,
-  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle, Radio, Tag, Layers
+  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle, Radio, Tag, Layers, Globe, RadioTower
 } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -17,22 +17,27 @@ export const DeviceDetails: React.FC = () => {
   const [device, setDevice] = useState<Device | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [healthHistory, setHealthHistory] = useState<HealthMetric[]>([]);
+  const [activity, setActivity] = useState<DeviceActivity | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'alerts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'health' | 'alerts'>('overview');
 
   useEffect(() => {
     const fetchDetails = async () => {
       if (!id) return;
       setIsLoading(true);
       try {
-        const [devRes, alertRes, healthRes] = await Promise.all([
+        const [devRes, alertRes, healthRes, actRes] = await Promise.all([
           apiClient.get(`/devices/${id}`),
           apiClient.get(`/devices/${id}/alerts`),
           apiClient.get(`/devices/${id}/health`),
+          apiClient.get(`/devices/${id}/activity`).catch(() => ({ data: null })),
         ]);
         setDevice(devRes.data);
         setAlerts(alertRes.data);
         setHealthHistory(healthRes.data);
+        if (actRes.data) {
+          setActivity(actRes.data);
+        }
       } catch (err) {
         console.error('Error fetching device details:', err);
       } finally {
@@ -63,13 +68,18 @@ export const DeviceDetails: React.FC = () => {
       case 'desktop':
       case 'workstation':
         return { label: 'Desktop', emoji: '🖥', icon: <Monitor size={16} className="text-sky-400" /> };
+      case 'server':
+        return { label: 'Server', emoji: '🖥️', icon: <Server size={16} className="text-indigo-400" /> };
+      case 'router':
+        return { label: 'Router', emoji: '📡', icon: <Router size={16} className="text-violet-400" /> };
+      case 'switch':
+        return { label: 'Switch', emoji: '🔀', icon: <Network size={16} className="text-blue-400" /> };
+      case 'firewall':
+        return { label: 'Firewall', emoji: '🛡️', icon: <Shield size={16} className="text-rose-400" /> };
       case 'printer':
         return { label: 'Printer', emoji: '🖨', icon: <Printer size={16} className="text-amber-400" /> };
-      case 'router':
-      case 'firewall':
-        return { label: 'Router', emoji: '📡', icon: <Router size={16} className="text-indigo-400" /> };
       case 'iot':
-        return { label: 'IoT', emoji: '📺', icon: <Tv size={16} className="text-purple-400" /> };
+        return { label: 'IoT', emoji: '📺', icon: <Tv size={16} className="text-fuchsia-400" /> };
       default:
         return { label: 'Unknown', emoji: '❓', icon: <HelpCircle size={16} className="text-slate-400" /> };
     }
@@ -124,6 +134,17 @@ export const DeviceDetails: React.FC = () => {
           }`}
         >
           System Overview &amp; Specifications
+        </button>
+        <button
+          onClick={() => setActiveTab('activity')}
+          className={`pb-3 transition border-b-2 font-medium flex items-center gap-1.5 ${
+            activeTab === 'activity'
+              ? 'border-cyan-400 text-cyan-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Activity size={14} />
+          <span>Network &amp; Web Activity</span>
         </button>
         <button
           onClick={() => setActiveTab('health')}
@@ -210,6 +231,14 @@ export const DeviceDetails: React.FC = () => {
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">Hardware Vendor:</span>
                   <span className="text-slate-200">{device.vendor || 'Unknown Hardware'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">Subnet Segment:</span>
+                  <span className="text-slate-200">{device.subnet || '192.168.1.0/24'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
+                  <span className="text-slate-400">VLAN Segment:</span>
+                  <span className="text-cyan-400 font-semibold">{device.vlan || 'VLAN 1'}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5">
                   <span className="text-slate-400">Status:</span>
@@ -312,6 +341,190 @@ export const DeviceDetails: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB: Network & Web Activity */}
+      {activeTab === 'activity' && (
+        <div className="space-y-6">
+          {/* Metrics Overview Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-mono text-slate-400 uppercase">DNS Queries</div>
+                  <div className="text-2xl font-bold font-mono text-cyan-400 mt-1">
+                    {activity?.summary.total_dns_queries || 0}
+                  </div>
+                </div>
+                <div className="p-3 bg-cyan-950/60 border border-cyan-800/60 rounded-xl text-cyan-400">
+                  <Globe size={20} />
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-mono text-slate-400 uppercase">Active Flows</div>
+                  <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
+                    {activity?.summary.total_connections || 0}
+                  </div>
+                </div>
+                <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-emerald-400">
+                  <Network size={20} />
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-mono text-slate-400 uppercase">Security Events</div>
+                  <div className="text-2xl font-bold font-mono text-amber-400 mt-1">
+                    {activity?.summary.total_security_events || 0}
+                  </div>
+                </div>
+                <div className="p-3 bg-amber-950/60 border border-amber-800/60 rounded-xl text-amber-400">
+                  <ShieldAlert size={20} />
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-mono text-slate-400 uppercase">Traffic In / Out</div>
+                  <div className="text-lg font-bold font-mono text-slate-200 mt-1">
+                    {((activity?.summary.bytes_uploaded || 0) / 1024).toFixed(1)} KB / {((activity?.summary.bytes_downloaded || 0) / 1024).toFixed(1)} KB
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-indigo-400">
+                  <Activity size={20} />
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top Destination Domains */}
+            <Card title="Top Destination Web & API Domains">
+              {!activity || activity.destination_domains.length === 0 ? (
+                <div className="py-8 text-center text-xs font-mono text-slate-500">
+                  No outgoing domain requests logged yet for this endpoint.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="text-slate-400 border-b border-[#1e293b]">
+                      <tr>
+                        <th className="pb-2">Destination Domain</th>
+                        <th className="pb-2">Category</th>
+                        <th className="pb-2 text-right">Hit Count</th>
+                        <th className="pb-2 text-right">Last Accessed</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {activity.destination_domains.map((dom, idx) => (
+                        <tr key={idx} className="hover:bg-slate-900/60">
+                          <td className="py-2 font-bold text-cyan-300">{dom.domain}</td>
+                          <td className="py-2 text-slate-400">{dom.category || 'Web'}</td>
+                          <td className="py-2 text-right text-slate-200 font-bold">{dom.count}</td>
+                          <td className="py-2 text-right text-slate-400 text-[11px]">
+                            {new Date(dom.last_accessed).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+
+            {/* DNS Queries Log */}
+            <Card title="Live DNS Name Resolution Activity">
+              {!activity || activity.dns_queries.length === 0 ? (
+                <div className="py-8 text-center text-xs font-mono text-slate-500">
+                  No DNS resolution records for this endpoint.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="text-slate-400 border-b border-[#1e293b]">
+                      <tr>
+                        <th className="pb-2">Queried Name</th>
+                        <th className="pb-2">Type</th>
+                        <th className="pb-2">Resolved IP</th>
+                        <th className="pb-2 text-right">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {activity.dns_queries.map((dns, idx) => (
+                        <tr key={idx} className="hover:bg-slate-900/60">
+                          <td className="py-2 text-slate-200">{dns.query}</td>
+                          <td className="py-2 text-indigo-400 font-bold">{dns.record_type || 'A'}</td>
+                          <td className="py-2 text-cyan-400">{dns.resolved_ip || '—'}</td>
+                          <td className="py-2 text-right text-slate-400 text-[11px]">
+                            {new Date(dns.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Connection Flows Table */}
+          <Card title="Recent Active Network Socket Flows">
+            {!activity || activity.recent_connections.length === 0 ? (
+              <div className="py-8 text-center text-xs font-mono text-slate-500">
+                No active socket connection telemetry reported.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="text-slate-400 border-b border-[#1e293b]">
+                    <tr>
+                      <th className="pb-2">Proto</th>
+                      <th className="pb-2">Local Port</th>
+                      <th className="pb-2">Destination</th>
+                      <th className="pb-2">Status</th>
+                      <th className="pb-2">Transfer</th>
+                      <th className="pb-2 text-right">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {activity.recent_connections.map((c, idx) => (
+                      <tr key={idx} className="hover:bg-slate-900/60">
+                        <td className="py-2 font-bold text-cyan-400">{c.protocol}</td>
+                        <td className="py-2 text-slate-300">{c.local_port || '—'}</td>
+                        <td className="py-2 text-slate-200">
+                          {c.destination_domain ? (
+                            <span>{c.destination_domain} ({c.destination_ip}:{c.destination_port})</span>
+                          ) : (
+                            <span>{c.destination_ip}:{c.destination_port}</span>
+                          )}
+                        </td>
+                        <td className="py-2">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 font-bold">
+                            {c.status || 'ESTABLISHED'}
+                          </span>
+                        </td>
+                        <td className="py-2 text-slate-400 text-[11px]">
+                          &uarr; {(c.bytes_sent / 1024).toFixed(1)}K &bull; &darr; {(c.bytes_recv / 1024).toFixed(1)}K
+                        </td>
+                        <td className="py-2 text-right text-slate-400 text-[11px]">
+                          {new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
         </div>
       )}

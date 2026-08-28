@@ -88,6 +88,8 @@ class DeviceUpdate(BaseModel):
 
 class DeviceResponse(DeviceBase):
     id: int
+    subnet: Optional[str] = None
+    vlan: Optional[str] = None
     first_seen: datetime
     last_seen: datetime
     interfaces: List[NetworkInterfaceSchema] = []
@@ -97,7 +99,7 @@ class DeviceResponse(DeviceBase):
 
 class TopologyNode(BaseModel):
     id: str
-    type: str  # internet, router, firewall, switch, server, workstation, soc
+    type: str  # internet, router, firewall, switch, server, workstation, laptop, desktop, mobile, printer, iot, unknown
     data: dict
     position: dict
 
@@ -110,6 +112,73 @@ class TopologyEdge(BaseModel):
     animated: Optional[bool] = False
 
 
+class TopologySummary(BaseModel):
+    total_devices: int = 0
+    online_devices: int = 0
+    offline_devices: int = 0
+
+
 class TopologyResponse(BaseModel):
     nodes: List[TopologyNode]
     edges: List[TopologyEdge]
+    summary: Optional[TopologySummary] = None
+
+
+class DNSQueryItem(BaseModel):
+    query: str
+    timestamp: datetime
+    record_type: Optional[str] = "A"
+    resolved_ip: Optional[str] = None
+
+
+class DestinationDomainItem(BaseModel):
+    domain: str
+    count: int
+    last_accessed: datetime
+    category: Optional[str] = "General Web"
+
+
+class ConnectionFlowItem(BaseModel):
+    protocol: str
+    local_port: Optional[int] = None
+    destination_ip: str
+    destination_port: Optional[int] = None
+    destination_domain: Optional[str] = None
+    status: Optional[str] = "ESTABLISHED"
+    bytes_sent: int = 0
+    bytes_recv: int = 0
+    timestamp: datetime
+
+
+class DeviceSecurityEventItem(BaseModel):
+    event_id: str
+    timestamp: datetime
+    event_type: str
+    severity: str
+    signature: Optional[str] = None
+    protocol: Optional[str] = None
+    source_ip: Optional[str] = None
+    destination_ip: Optional[str] = None
+    destination_port: Optional[int] = None
+
+
+class DeviceActivitySummary(BaseModel):
+    total_dns_queries: int = 0
+    total_connections: int = 0
+    total_security_events: int = 0
+    bytes_uploaded: int = 0
+    bytes_downloaded: int = 0
+
+
+class DeviceActivityResponse(BaseModel):
+    device_id: int
+    ip_address: str
+    hostname: Optional[str] = None
+    device_type: str
+    subnet: str
+    vlan: str
+    dns_queries: List[DNSQueryItem] = []
+    destination_domains: List[DestinationDomainItem] = []
+    recent_connections: List[ConnectionFlowItem] = []
+    security_events: List[DeviceSecurityEventItem] = []
+    summary: DeviceActivitySummary

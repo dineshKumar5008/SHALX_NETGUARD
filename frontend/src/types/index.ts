@@ -47,7 +47,7 @@ export interface NetworkInterface {
   is_primary: boolean;
 }
 
-export type DeviceType = 'Laptop' | 'Mobile' | 'Desktop' | 'Printer' | 'Router' | 'IoT' | 'Unknown' | 'workstation' | 'server' | 'firewall' | 'switch' | 'soc';
+export type DeviceType = 'Laptop' | 'Mobile' | 'Desktop' | 'Printer' | 'Router' | 'IoT' | 'Unknown' | 'Server' | 'Switch' | 'Firewall' | 'workstation' | 'server' | 'firewall' | 'switch' | 'soc' | string;
 export type ConfidenceLevel = 'High' | 'Medium' | 'Low';
 
 export interface Device {
@@ -60,8 +60,10 @@ export interface Device {
   os_version?: string;
   os_confidence?: ConfidenceLevel;
   architecture?: string;
-  device_type: DeviceType | string;
+  device_type: DeviceType;
   device_type_confidence?: ConfidenceLevel;
+  subnet?: string;
+  vlan?: string;
   open_ports?: number[];
   detected_services?: string[];
   status: 'ONLINE' | 'OFFLINE' | 'WARNING' | 'CRITICAL';
@@ -71,6 +73,72 @@ export interface Device {
   last_seen: string;
   notes?: string;
   interfaces?: NetworkInterface[];
+}
+
+export interface DNSQueryItem {
+  query: string;
+  timestamp: string;
+  record_type?: string;
+  resolved_ip?: string;
+}
+
+export interface DestinationDomainItem {
+  domain: string;
+  count: number;
+  last_accessed: string;
+  category?: string;
+}
+
+export interface ConnectionFlowItem {
+  protocol: string;
+  local_port?: number;
+  destination_ip: string;
+  destination_port?: number;
+  destination_domain?: string;
+  status?: string;
+  bytes_sent: number;
+  bytes_recv: number;
+  timestamp: string;
+}
+
+export interface DeviceSecurityEventItem {
+  event_id: string;
+  timestamp: string;
+  event_type: string;
+  severity: string;
+  signature?: string;
+  protocol?: string;
+  source_ip?: string;
+  destination_ip?: string;
+  destination_port?: number;
+}
+
+export interface DeviceActivitySummary {
+  total_dns_queries: number;
+  total_connections: number;
+  total_security_events: number;
+  bytes_uploaded: number;
+  bytes_downloaded: number;
+}
+
+export interface DeviceActivity {
+  device_id: number;
+  ip_address: string;
+  hostname?: string;
+  device_type: string;
+  subnet: string;
+  vlan: string;
+  dns_queries: DNSQueryItem[];
+  destination_domains: DestinationDomainItem[];
+  recent_connections: ConnectionFlowItem[];
+  security_events: DeviceSecurityEventItem[];
+  summary: DeviceActivitySummary;
+}
+
+export interface TopologySummary {
+  total_devices: number;
+  online_devices: number;
+  offline_devices: number;
 }
 
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';

@@ -8,7 +8,7 @@ import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { EmptyState } from '../components/common/EmptyState';
 import { 
-  Server, Search, Filter, RefreshCw, Eye, ShieldCheck, 
+  Server, Search, Filter, RefreshCw, Eye, ShieldCheck, Network,
   Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle, HardDrive 
 } from 'lucide-react';
 
@@ -67,15 +67,18 @@ export const Devices: React.FC = () => {
       case 'desktop':
       case 'workstation':
         return <Monitor size={15} className="text-sky-400" />;
+      case 'server':
+        return <Server size={15} className="text-indigo-400" />;
+      case 'router':
+        return <Router size={15} className="text-violet-400" />;
+      case 'switch':
+        return <Network size={15} className="text-blue-400" />;
+      case 'firewall':
+        return <ShieldCheck size={15} className="text-rose-400" />;
       case 'printer':
         return <Printer size={15} className="text-amber-400" />;
-      case 'router':
-      case 'firewall':
-        return <Router size={15} className="text-indigo-400" />;
       case 'iot':
-        return <Tv size={15} className="text-purple-400" />;
-      case 'server':
-        return <Server size={15} className="text-cyan-400" />;
+        return <Tv size={15} className="text-fuchsia-400" />;
       default:
         return <HelpCircle size={15} className="text-slate-400" />;
     }
@@ -131,10 +134,13 @@ export const Devices: React.FC = () => {
           >
             <option value="">All Device Types</option>
             <option value="Laptop">💻 Laptop</option>
-            <option value="Mobile">📱 Mobile</option>
             <option value="Desktop">🖥 Desktop</option>
-            <option value="Printer">🖨 Printer</option>
+            <option value="Mobile">📱 Mobile</option>
+            <option value="Server">🖥️ Server</option>
             <option value="Router">📡 Router / Gateway</option>
+            <option value="Switch">🔀 Switch</option>
+            <option value="Firewall">🛡️ Firewall</option>
+            <option value="Printer">🖨 Printer</option>
             <option value="IoT">📺 IoT Device</option>
             <option value="Unknown">❓ Unknown</option>
           </select>
@@ -176,6 +182,7 @@ export const Devices: React.FC = () => {
                   <th className="pb-3">MAC Address</th>
                   <th className="pb-3">Device Type</th>
                   <th className="pb-3">Vendor / Hardware</th>
+                  <th className="pb-3">Subnet / VLAN</th>
                   <th className="pb-3">Operating System</th>
                   <th className="pb-3">Status</th>
                   <th className="pb-3">Last Seen</th>
@@ -187,7 +194,7 @@ export const Devices: React.FC = () => {
                   <tr key={device.id} className="hover:bg-slate-900/60 transition">
                     <td className="py-3 font-semibold text-slate-100 flex items-center gap-2">
                       {getDeviceIcon(device.device_type)}
-                      <span>{device.hostname || 'Hostname unavailable'}</span>
+                      <span className="truncate max-w-[150px]">{device.hostname || 'Hostname unavailable'}</span>
                     </td>
                     <td className="py-3 font-mono text-cyan-400">{device.ip_address}</td>
                     <td className="py-3 text-slate-400">{device.mac_address || 'Unavailable'}</td>
@@ -205,14 +212,18 @@ export const Devices: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 text-slate-300">{device.vendor || 'Unknown'}</td>
+                    <td className="py-3 text-slate-300 truncate max-w-[140px]">{device.vendor || 'Unknown'}</td>
                     <td className="py-3 text-slate-300">
+                      <div>{device.subnet || '192.168.1.0/24'}</div>
+                      <div className="text-[10px] text-cyan-400">{device.vlan || 'VLAN 1'}</div>
+                    </td>
+                    <td className="py-3 text-slate-300 truncate max-w-[120px]">
                       {device.os_type ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
                     </td>
                     <td className="py-3">
                       <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
                     </td>
-                    <td className="py-3 text-slate-400">
+                    <td className="py-3 text-slate-400 text-[11px]">
                       {new Date(device.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="py-3 text-right">

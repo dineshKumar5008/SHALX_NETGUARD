@@ -429,6 +429,37 @@ def get_active_local_subnets() -> List[str]:
     return list(subnets)
 
 
+def get_device_subnet_and_vlan(ip: str, monitored_subnets: Optional[List[str]] = None) -> Tuple[str, str]:
+    """
+    Calculate the subnet CIDR and VLAN description for a given IP address.
+    """
+    if not ip or is_link_local_or_bogon_ip(ip):
+        return "127.0.0.0/8", "Loopback / Isolated"
+
+    try:
+        ip_obj = ipaddress.IPv4Address(ip)
+        if monitored_subnets:
+            for s in monitored_subnets:
+                try:
+                    net_obj = ipaddress.IPv4Network(s, strict=False)
+                    if ip_obj in net_obj:
+                        cidr = str(net_obj)
+                        parts = cidr.split(".")
+                        vlan_id = parts[2] if len(parts) > 2 else "1"
+                        return cidr, f"VLAN {vlan_id}"
+                except Exception:
+                    pass
+
+        # Default /24 network calculation
+        net_obj = ipaddress.IPv4Network(f"{ip}/24", strict=False)
+        cidr = str(net_obj)
+        parts = cidr.split(".")
+        vlan_id = parts[2] if len(parts) > 2 else "1"
+        return cidr, f"VLAN {vlan_id}"
+    except Exception:
+        return "192.168.1.0/24", "VLAN 1"
+
+
 def query_netbios_name(ip: str, timeout: float = 0.25) -> Optional[str]:
     """Attempt to resolve Windows / Samba hostname using NetBIOS Name Service (port 137 UDP)."""
     try:
@@ -689,103 +720,134 @@ class NetworkDiscoveryService:
         hostname_upper = (hostname or "").upper()
         vendor_lower = (vendor or "").lower()
 
-        # 1. PRINTER CLASSIFICATION
-        if 9100 in open_ports or 515 in open_ports or 631 in open_ports:
-            device_type = "Printer"
+        # 1. FIREWALL CLASSIFICATION
+        if any(f in vendor_lower for f in ["pfsense", "opnsense", "fortinet", "fortigate", "palo alto", "sophos", "sonicwall", "check point", "firewalla", "smoothwall"]) or \
+           any(f in hostname_upper for f in ["PFSENSE", "OPNSENSE", "FORTIGATE", "PALOALTO", "SOPHOS", "SONICWALL", "FIREWALL", "FW-", "NETGUARD-FW"]):
+            device_type = "Firewall"
             device_type_confidence = "High"
-            os_type = "Printer Firmware"
+            os_type = "Firewall OS / Firmware"
             os_confidence = "High"
-        elif vendor and any(p in vendor_lower for p in ["printer", "canon", "epson", "brother", "xerox", "lexmark", "kyocera", "ricoh", "konica"]):
-            device_type = "Printer"
-            device_type_confidence = "High" if (80 in open_ports or 443 in open_ports) else "Medium"
-            os_type = "Printer Firmware"
-            os_confidence = "Medium"
-        elif any(p in hostname_upper for p in ["PRINTER", "HP-LASER", "EPSON", "CANON", "BROTHER", "DIRECT-"]):
-            device_type = "Printer"
-            device_type_confidence = "High"
-            os_type = "Printer Firmware"
-            os_confidence = "Medium"
 
         # 2. ROUTER / GATEWAY CLASSIFICATION
         elif is_gw:
             device_type = "Router"
             device_type_confidence = "High"
             if not vendor:
-                vendor = "Mobile Hotspot / Gateway"
+                vendor = "Network Gateway / Router"
             if 53 in open_ports and 80 not in open_ports and 443 not in open_ports:
                 os_type = "Mobile OS (Hotspot)"
                 os_confidence = "Medium"
             else:
                 os_type = "RouterOS / Firmware"
                 os_confidence = "Medium"
-        elif (53 in open_ports or 67 in open_ports) and (80 in open_ports or 443 in open_ports or any(r in vendor_lower for r in ["router", "cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel"])):
+        elif any(r in vendor_lower for r in ["cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel", "openwrt", "dd-wrt", "asus", "tenda", "arista"]) or \
+             any(r in hostname_upper for r in ["ROUTER", "GATEWAY", "MIKROTIK", "ROUTEROS", "OPENWRT", "DDWRT", "AP-", "ACCESS-POINT", "HOTSPOT", "WIFI-ROUTER"]):
             device_type = "Router"
-            device_type_confidence = "High"
+            device_type_confidence = "High" if (53 in open_ports or 67 in open_ports or 80 in open_ports) else "Medium"
             os_type = "RouterOS / Firmware"
             os_confidence = "Medium"
-        elif vendor and any(r in vendor_lower for r in ["cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel"]):
+        elif (53 in open_ports or 67 in open_ports) and (80 in open_ports or 443 in open_ports or 8080 in open_ports or 8443 in open_ports) and not any(s in hostname_upper for s in ["SERVER", "SRV", "UBUNTU", "DEBIAN", "WIN-"]):
             device_type = "Router"
             device_type_confidence = "Medium"
             os_type = "RouterOS / Firmware"
             os_confidence = "Low"
 
-        # 3. IOT / SMART HOME / MEDIA CLASSIFICATION
-        elif any(p in open_ports for p in [8008, 8009, 1900, 1883, 5000]) or (vendor and any(i in vendor_lower for i in ["roku", "sonos", "espressif", "tuya", "smart tv", "amazon", "nest", "chromecast", "hue", "bravia", "playstation"])):
+        # 3. SWITCH CLASSIFICATION
+        elif any(s in vendor_lower for s in ["catalyst", "edgeswitch", "prosafe", "procurve", "aruba", "juniper"]) or \
+             any(s in hostname_upper for s in ["SWITCH", "SW-", "CATALYST", "EDGESWITCH", "PROSAFE", "PROCURVE", "ARUBA-SW"]):
+            device_type = "Switch"
+            device_type_confidence = "High"
+            os_type = "Switch Firmware"
+            os_confidence = "High"
+
+        # 4. PRINTER CLASSIFICATION
+        elif 9100 in open_ports or 515 in open_ports or 631 in open_ports:
+            device_type = "Printer"
+            device_type_confidence = "High"
+            os_type = "Printer Firmware"
+            os_confidence = "High"
+        elif vendor and any(p in vendor_lower for p in ["printer", "canon", "epson", "brother", "xerox", "lexmark", "kyocera", "ricoh", "konica", "fuji", "hewlett-packard printer", "hp laserjet"]):
+            device_type = "Printer"
+            device_type_confidence = "High" if (80 in open_ports or 443 in open_ports) else "Medium"
+            os_type = "Printer Firmware"
+            os_confidence = "Medium"
+        elif any(p in hostname_upper for p in ["PRINTER", "HP-LASER", "EPSON", "CANON", "BROTHER", "DIRECT-", "MFP", "COPIER"]):
+            device_type = "Printer"
+            device_type_confidence = "High"
+            os_type = "Printer Firmware"
+            os_confidence = "Medium"
+
+        # 5. IOT / SMART HOME / MEDIA CLASSIFICATION
+        elif any(p in open_ports for p in [554, 1883, 8008, 8009, 1900, 5000, 7000]) or \
+             (vendor and any(i in vendor_lower for i in ["espressif", "tuya", "sonos", "roku", "amazon", "nest", "ring", "hue", "philips lighting", "hikvision", "dahua", "wyze", "reolink", "smart tv", "bravia", "chromecast", "playstation", "xbox", "nintendo"])):
             device_type = "IoT"
             device_type_confidence = "High"
             os_type = "Embedded Linux / IoT"
             os_confidence = "Medium"
-        elif any(i in hostname_upper for i in ["TV", "CHROMECAST", "ROKU", "ECHO", "SMART", "IOT", "CAM", "SONOS", "ALEXA"]):
+        elif any(i in hostname_upper for i in ["TV", "CHROMECAST", "ROKU", "ECHO", "SMART", "IOT", "CAM", "SONOS", "ALEXA", "APPLE-TV", "HOME-ASSISTANT", "TPLINK-PLUG", "WEMO", "ESP32", "ESP8266"]):
             device_type = "IoT"
             device_type_confidence = "High"
             os_type = "Embedded Linux / IoT"
             os_confidence = "Medium"
 
-        # 4. MOBILE PHONE / TABLET CLASSIFICATION
-        elif vendor and any(m in vendor_lower for m in ["apple", "samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "mobile"]):
+        # 6. MOBILE PHONE / TABLET CLASSIFICATION
+        elif (vendor and any(m in vendor_lower for m in ["samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "realme", "honor", "tecno", "infinix"])) or \
+             (vendor and "apple" in vendor_lower and not any(a in hostname_upper for a in ["MACBOOK", "IMAC", "MAC-MINI", "MACPRO"])):
             device_type = "Mobile"
             device_type_confidence = "High"
             os_type = "iOS" if "apple" in vendor_lower else "Android"
             os_confidence = "Medium"
-        elif any(m in hostname_upper for m in ["IPHONE", "IPAD", "ANDROID", "GALAXY", "PIXEL", "REDMI", "ONEPLUS", "VIVO", "OPPO", "SM-"]):
+        elif any(m in hostname_upper for m in ["IPHONE", "IPAD", "ANDROID", "GALAXY", "PIXEL", "REDMI", "ONEPLUS", "VIVO", "OPPO", "REALME", "SM-", "M20", "M21", "CPH", "RMX", "PHONE", "TABLET"]):
             device_type = "Mobile"
             device_type_confidence = "High"
             os_type = "iOS" if ("IPHONE" in hostname_upper or "IPAD" in hostname_upper) else "Android"
             os_confidence = "High"
-        elif mac and is_locally_administered_mac(mac) and not (135 in open_ports or 445 in open_ports or 22 in open_ports):
+        elif mac and is_locally_administered_mac(mac) and not (135 in open_ports or 445 in open_ports or 22 in open_ports or 3389 in open_ports):
             device_type = "Mobile"
             device_type_confidence = "Medium"
             os_type = "Android / iOS (Private Wi-Fi MAC)"
             os_confidence = "Medium"
 
-        # 5. LAPTOP / DESKTOP / WORKSTATION CLASSIFICATION
-        elif any(h in hostname_upper for h in ["LAPTOP-", "NOTEBOOK", "THINKPAD", "MACBOOK", "SURFACE"]):
+        # 7. SERVER CLASSIFICATION
+        elif any(s in hostname_upper for s in ["SRV", "SERVER", "PROXMOX", "ESXI", "VSPHERE", "UBUNTU-SERVER", "DEBIAN", "RHEL", "CENTOS", "ROCKY", "ALMALINUX", "FEDORA-SERVER", "PIHOLE", "NAS", "SYNOLOGY", "QNAP", "TRUENAS", "FREEBOOT", "DOCKER", "K8S", "KUBERNETES", "NODE-", "DB-", "DATABASE", "PROD-", "STAGE-", "DEV-SERVER"]):
+            device_type = "Server"
+            device_type_confidence = "High"
+            os_type = "Linux" if any(l in hostname_upper for l in ["UBUNTU", "DEBIAN", "RHEL", "CENTOS", "LINUX"]) else "Server OS"
+            os_confidence = "High"
+        elif any(p in open_ports for p in [3306, 5432, 27017, 6379, 1521, 1433]):
+            device_type = "Server"
+            device_type_confidence = "High"
+            os_type = "Windows Server" if (135 in open_ports or 445 in open_ports) else "Linux / Database Server"
+            os_confidence = "High"
+
+        # 8. LAPTOP CLASSIFICATION
+        elif any(h in hostname_upper for h in ["LAPTOP-", "NOTEBOOK", "THINKPAD", "MACBOOK", "SURFACE", "ENVY", "PAVILION", "IDEAPAD", "ZENBOOK", "XPS", "LATITUDE", "PRECISION", "INSPIRON", "ELITEBOOK", "PROBOOK", "YOGA", "SWIFT", "GRAM"]):
             device_type = "Laptop"
             device_type_confidence = "High"
             os_type = "macOS" if "MACBOOK" in hostname_upper else "Windows"
             os_confidence = "High"
-        elif any(h in hostname_upper for h in ["DESKTOP-", "PC-", "WORKSTATION", "RIG-", "MINIPC"]):
+
+        # 9. DESKTOP CLASSIFICATION
+        elif any(h in hostname_upper for h in ["DESKTOP-", "PC-", "WORKSTATION", "RIG-", "TOWER", "OPTIPLEX", "VOSTRO", "VERITON", "THINKCENTRE", "PRODESK", "ELITEDESK", "ALL-IN-ONE", "AIO", "MINIPC"]):
             device_type = "Desktop"
             device_type_confidence = "High"
             os_type = "Windows"
             os_confidence = "High"
-        elif 135 in open_ports or 445 in open_ports or 3389 in open_ports or 5357 in open_ports:
-            os_type = "Windows"
-            os_confidence = "High"
-            device_type = "Desktop"
-            device_type_confidence = "Medium"
-        elif 22 in open_ports:
-            os_type = "Linux"
-            os_confidence = "High"
-            device_type = "Desktop"
-            device_type_confidence = "Medium"
 
-        # 6. UNKNOWN (Insufficient Evidence)
+        # 10. UNKNOWN (Insufficient Evidence - NEVER default arbitrarily to Desktop)
         else:
             device_type = "Unknown"
             device_type_confidence = "Low"
-            os_type = None
-            os_confidence = "Low"
+            # Set detectable OS if open ports indicate it, but do NOT assume Desktop hardware
+            if 135 in open_ports or 445 in open_ports or 3389 in open_ports or 5357 in open_ports:
+                os_type = "Windows"
+                os_confidence = "High"
+            elif 22 in open_ports:
+                os_type = "Linux"
+                os_confidence = "Medium"
+            else:
+                os_type = None
+                os_confidence = "Low"
 
         return {
             "ip_address": ip,

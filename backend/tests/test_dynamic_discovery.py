@@ -173,4 +173,90 @@ async def test_dynamic_scan_execution():
         for d in devices:
             assert d.ip_address is not None
             assert d.status in ["ONLINE", "OFFLINE"]
-            assert d.device_type in ["Laptop", "Mobile", "Desktop", "Printer", "Router", "IoT", "Unknown", "workstation", "server", "soc"]
+            assert d.device_type in ["Laptop", "Mobile", "Desktop", "Printer", "Router", "Switch", "Firewall", "Server", "IoT", "Unknown", "workstation", "server", "soc"]
+
+
+@pytest.mark.asyncio
+async def test_subnet_and_vlan_computation():
+    from backend.app.collectors.discovery import get_device_subnet_and_vlan
+    
+    # Standard private /24
+    cidr1, vlan1 = get_device_subnet_and_vlan("192.168.1.50")
+    assert cidr1 == "192.168.1.0/24"
+    assert vlan1 == "VLAN 1"
+
+    cidr2, vlan2 = get_device_subnet_and_vlan("172.23.230.15", monitored_subnets=["172.23.230.0/24", "10.0.0.0/8"])
+    assert cidr2 == "172.23.230.0/24"
+    assert vlan2 == "VLAN 230"
+
+    cidr_lb, vlan_lb = get_device_subnet_and_vlan("127.0.0.1")
+    assert cidr_lb == "127.0.0.0/8"
+
+
+@pytest.mark.asyncio
+async def test_device_activity_endpoint(async_client):
+    from backend.tests.conftest import perform_test_login
+    from backend.app.models.security_event import SecurityEvent
+    
+    now = datetime.now(timezone.utc)
+    
+    async with TestSessionLocal() as session:
+        dev = Device(
+            ip_address="192.168.1.188",
+            mac_address="52:54:00:99:88:77",
+            hostname="DESKTOP-FINANCE",
+            vendor="Dell Inc.",
+            os_type="Windows",
+            device_type="Desktop",
+            status="ONLINE",
+            first_seen=now,
+            last_seen=now
+        )
+        session.add(dev)
+        await session.commit()
+        await session.refresh(dev)
+        dev_id = dev.id
+
+        # Add DNS and flow security events
+        evt1 = SecurityEvent(
+            event_id="evt-dns-001",
+            timestamp=now,
+            source="suricata",
+            event_type="dns",
+            severity="LOW",
+            signature="DNS Query: api.render.com",
+            description="api.render.com",
+            source_ip="192.168.1.188",
+            destination_ip="1.1.1.1",
+            destination_port=53
+        )
+        evt2 = SecurityEvent(
+            event_id="evt-tls-002",
+            timestamp=now,
+            source="suricata",
+            event_type="tls",
+            severity="LOW",
+            signature="TLS SNI: github.com",
+            source_ip="192.168.1.188",
+            destination_ip="140.82.121.4",
+            destination_port=443
+        )
+        session.add_all([evt1, evt2])
+        await session.commit()
+
+    token = await perform_test_login(async_client, username="testadmin", password="Password123!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await async_client.get(f"/api/v1/devices/{dev_id}/activity", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["device_id"] == dev_id
+    assert data["ip_address"] == "192.168.1.188"
+    assert data["subnet"] == "192.168.1.0/24"
+    assert len(data["dns_queries"]) >= 1
+    assert any(q["query"] == "api.render.com" for q in data["dns_queries"])
+    assert len(data["destination_domains"]) >= 1
+    assert any(d["domain"] == "github.com" for d in data["destination_domains"])
+    assert data["summary"]["total_dns_queries"] >= 1
+
