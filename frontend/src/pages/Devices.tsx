@@ -194,10 +194,10 @@ export const Devices: React.FC = () => {
                   <tr key={device.id} className="hover:bg-slate-900/60 transition">
                     <td className="py-3 font-semibold text-slate-100 flex items-center gap-2">
                       {getDeviceIcon(device.device_type)}
-                      <span className="truncate max-w-[150px]">{device.hostname || 'Hostname unavailable'}</span>
+                      <span className="truncate max-w-[150px]">{device.hostname || 'Unknown'}</span>
                     </td>
                     <td className="py-3 font-mono text-cyan-400">{device.ip_address}</td>
-                    <td className="py-3 text-slate-400">{device.mac_address || 'Unavailable'}</td>
+                    <td className="py-3 text-slate-400">{device.mac_address || 'Unknown'}</td>
                     <td className="py-3">
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-slate-200 capitalize">{device.device_type}</span>
@@ -218,7 +218,7 @@ export const Devices: React.FC = () => {
                       <div className="text-[10px] text-cyan-400">{device.vlan || 'VLAN 1'}</div>
                     </td>
                     <td className="py-3 text-slate-300 truncate max-w-[120px]">
-                      {device.os_type ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
+                      {device.os_type && device.os_type !== 'Unknown' ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
                     </td>
                     <td className="py-3">
                       <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>

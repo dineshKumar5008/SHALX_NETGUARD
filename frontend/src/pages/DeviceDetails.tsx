@@ -104,11 +104,11 @@ export const DeviceDetails: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold font-mono text-slate-100">{device.hostname || 'Hostname unavailable'}</h1>
+                <h1 className="text-xl font-bold font-mono text-slate-100">{device.hostname || 'Unknown'}</h1>
                 <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
               </div>
               <div className="text-xs font-mono text-slate-400 mt-0.5">
-                IP: <span className="text-cyan-400">{device.ip_address}</span> | MAC: {device.mac_address || 'Unavailable'}
+                IP: <span className="text-cyan-400">{device.ip_address}</span> | MAC: {device.mac_address || 'Unknown'}
               </div>
             </div>
           </div>
@@ -154,8 +154,8 @@ export const DeviceDetails: React.FC = () => {
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Activity size={14} />
-          <span>Host Health Telemetry ({healthHistory.length})</span>
+          <Cpu size={14} />
+          <span>Host Health Telemetry</span>
         </button>
         <button
           onClick={() => setActiveTab('alerts')}
@@ -187,11 +187,11 @@ export const DeviceDetails: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">MAC Address:</span>
-                  <span className="text-slate-200">{device.mac_address || 'Unavailable'}</span>
+                  <span className="text-slate-200">{device.mac_address || 'Unknown'}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">Hostname:</span>
-                  <span className="text-slate-200">{device.hostname || 'Hostname unavailable'}</span>
+                  <span className="text-slate-200">{device.hostname || 'Unknown'}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">Device Type:</span>
@@ -212,9 +212,9 @@ export const DeviceDetails: React.FC = () => {
                   <span className="text-slate-400">Operating System:</span>
                   <div className="flex items-center gap-2">
                     <span className="text-slate-200">
-                      {device.os_type ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
+                      {device.os_type && device.os_type !== 'Unknown' ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
                     </span>
-                    {device.os_type && (
+                    {device.os_type && device.os_type !== 'Unknown' && (
                       <Badge variant={
                         device.os_confidence === 'High' ? 'online' :
                         device.os_confidence === 'Medium' ? 'medium' : 'default'
@@ -226,11 +226,11 @@ export const DeviceDetails: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">Architecture:</span>
-                  <span className="text-slate-200">{device.architecture || 'Not detected'}</span>
+                  <span className="text-slate-200">{device.architecture || 'Unknown'}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">Hardware Vendor:</span>
-                  <span className="text-slate-200">{device.vendor || 'Unknown Hardware'}</span>
+                  <span className="text-slate-200">{device.vendor || 'Unknown'}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
                   <span className="text-slate-400">Subnet Segment:</span>

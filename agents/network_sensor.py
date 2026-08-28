@@ -230,34 +230,65 @@ def scan_local_network() -> List[Dict[str, Any]]:
         ports = probe_ports(ip, list(PORT_SERVICE_MAP.keys()))
         services = [PORT_SERVICE_MAP[p][0] for p in ports if p in PORT_SERVICE_MAP]
 
-        # Determine evidence-based device type
+        hostname = resolve_hostname(ip)
+        hostname_upper = (hostname or "").upper()
+
+        # Determine evidence-based device type and OS
         dev_type = "Unknown"
         conf = "Low"
-        if 9100 in ports or 515 in ports or 631 in ports:
+        os_type = "Unknown"
+        os_conf = "Low"
+
+        if 9100 in ports or 515 in ports or 631 in ports or any(p in hostname_upper for p in ["PRINTER", "HP-", "CANON", "EPSON"]):
             dev_type = "Printer"
             conf = "High"
-        elif 53 in ports or 8080 in ports:
+            os_type = "Printer Firmware"
+            os_conf = "High"
+        elif 53 in ports or 8080 in ports or any(r in hostname_upper for r in ["ROUTER", "GATEWAY", "AP-"]):
             dev_type = "Router"
-            conf = "Medium"
-        elif 1900 in ports or 8008 in ports:
+            conf = "High" if "ROUTER" in hostname_upper else "Medium"
+            os_type = "RouterOS / Embedded Linux"
+            os_conf = "Medium"
+        elif 1900 in ports or 8008 in ports or any(i in hostname_upper for i in ["TV", "CHROMECAST", "ROKU", "ECHO", "IOT"]):
             dev_type = "IoT"
-            conf = "Medium"
-        elif 3389 in ports or 445 in ports:
+            conf = "High" if any(i in hostname_upper for i in ["TV", "ROKU"]) else "Medium"
+            os_type = "Embedded Linux / IoT"
+            os_conf = "Medium"
+        elif any(s in hostname_upper for s in ["SRV", "SERVER", "UBUNTU", "DEBIAN", "NAS", "DOCKER", "K8S"]) or any(p in ports for p in [3306, 5432, 27017, 6379]):
+            dev_type = "Server"
+            conf = "High"
+            os_type = "Linux"
+            os_conf = "High"
+        elif any(m in hostname_upper for m in ["IPHONE", "IPAD", "ANDROID", "GALAXY", "PIXEL", "PHONE"]):
+            dev_type = "Mobile"
+            conf = "High"
+            os_type = "iOS" if "IPHONE" in hostname_upper else "Android"
+            os_conf = "High"
+        elif any(h in hostname_upper for h in ["LAPTOP-", "NOTEBOOK", "THINKPAD", "MACBOOK", "SURFACE"]):
+            dev_type = "Laptop"
+            conf = "High"
+            os_type = "macOS" if "MACBOOK" in hostname_upper else "Windows"
+            os_conf = "High"
+        elif any(h in hostname_upper for h in ["DESKTOP-", "PC-", "WORKSTATION", "RIG-", "OPTIPLEX"]):
             dev_type = "Desktop"
-            conf = "Medium"
+            conf = "High"
+            os_type = "Windows"
+            os_conf = "High"
+        elif 135 in ports or 445 in ports or 3389 in ports:
+            os_type = "Windows"
+            os_conf = "High"
         elif 22 in ports:
-            dev_type = "Linux Host"
-            conf = "Medium"
+            os_type = "Linux"
+            os_conf = "Medium"
 
-        hostname = resolve_hostname(ip)
         discovered_nodes.append({
             "ip_address": ip,
             "mac_address": mac,
             "hostname": hostname,
             "vendor": None,
-            "os_type": "Unknown",
+            "os_type": os_type,
             "os_version": None,
-            "os_confidence": "Low",
+            "os_confidence": os_conf,
             "device_type": dev_type,
             "device_type_confidence": conf,
             "architecture": None,

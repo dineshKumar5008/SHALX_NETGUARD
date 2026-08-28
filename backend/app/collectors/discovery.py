@@ -246,21 +246,21 @@ def is_locally_administered_mac(mac: str) -> bool:
 
 
 def get_vendor_by_mac(mac: Optional[str]) -> Optional[str]:
-    """Lookup hardware vendor by MAC OUI prefix or detect randomized mobile address."""
+    """Lookup hardware vendor by IEEE MAC OUI prefix or identify locally administered / private MAC."""
     if not mac:
         return None
     clean_mac = normalize_mac(mac)
     if not clean_mac:
         return None
     prefix = ":".join(clean_mac.split(":")[:3]) if len(clean_mac.split(":")) >= 3 else ""
-    
+
     vendor = VENDOR_MAP.get(prefix)
     if vendor:
         return vendor
-    
-    # Detect Android / iOS randomized MAC
+
+    # Identify locally administered / randomized MAC without falsely assuming Mobile hardware
     if is_locally_administered_mac(clean_mac):
-        return "Mobile Device (Private Wi-Fi MAC)"
+        return "Private / Randomized MAC"
 
     return None
 
@@ -487,8 +487,8 @@ def query_netbios_name(ip: str, timeout: float = 0.25) -> Optional[str]:
 
 def resolve_hostname(ip: str) -> Optional[str]:
     """
-    Resolve real hostname using NetBIOS or Reverse DNS.
-    Returns None if unresolved. Never generates fake placeholder names.
+    Resolve real hostname using NetBIOS Name Service (port 137) or Reverse DNS (PTR).
+    Returns None if unresolved. NEVER generates fake placeholder names or uses backend server hostname.
     """
     nb_name = query_netbios_name(ip)
     if nb_name:
@@ -497,6 +497,10 @@ def resolve_hostname(ip: str) -> Optional[str]:
     try:
         resolved, _, _ = socket.gethostbyaddr(ip)
         if resolved and not resolved.endswith(".in-addr.arpa") and resolved != ip:
+            # Prevent backend server hostname from being returned for unrelated discovered IPs
+            server_host = socket.gethostname()
+            if resolved.lower() == server_host.lower():
+                return None
             return resolved
     except Exception:
         pass
@@ -507,20 +511,29 @@ def resolve_hostname(ip: str) -> Optional[str]:
 class NetworkDiscoveryService:
     """
     Real Dynamic Network Discovery Engine for Hotspots, Home LANs, and Enterprise Networks.
-    Accurately maps the host laptop as a single asset and discovers true connected network clients.
+    Accurately maps real discovered network clients without leaking monitoring server host details.
     """
 
-    def get_local_host_device(self) -> Dict[str, Any]:
+    def get_local_host_device(self) -> Optional[Dict[str, Any]]:
         """
-        Inspect the local host machine running NetGuard.
-        Returns ONE unified Device record representing the host laptop/workstation with high confidence.
+        Inspect the local host machine running NetGuard if on a valid local physical subnet.
+        Returns a unified Device record representing the host laptop/workstation.
+        Returns None if running in cloud container (Render/AWS) where localhost is not a local LAN endpoint.
         """
+        # Guard: In cloud hosting, the server is monitored via /health/server-self and should not be injected into local LAN asset discovery
+        if os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID") or os.environ.get("AWS_EXECUTION_ENV"):
+            return None
+
         context = get_primary_host_network_context()
+        ip = context.get("ip_address")
+        if not ip or is_link_local_or_bogon_ip(ip) or ip.startswith("127."):
+            return None
+
         host_name = socket.gethostname()
         os_sys = platform.system()
         os_ver = f"{platform.system()} {platform.release()}"
         arch = platform.machine()
-        vendor = get_vendor_by_mac(context.get("mac_address")) or "Host Laptop / PC"
+        vendor = get_vendor_by_mac(context.get("mac_address")) or "Host Workstation"
 
         # Hardware chassis & battery detection
         has_battery = False
@@ -533,11 +546,17 @@ class NetworkDiscoveryService:
         host_upper = host_name.upper()
         if has_battery or host_upper.startswith("LAPTOP-") or "NOTEBOOK" in host_upper or "SURFACE" in host_upper or "THINKPAD" in host_upper:
             detected_dev_type = "Laptop"
+            dev_conf = "High"
         elif host_upper.startswith("DESKTOP-") or host_upper.startswith("PC-") or "WORKSTATION" in host_upper:
             detected_dev_type = "Desktop"
+            dev_conf = "High"
+        elif "SERVER" in host_upper or "SRV-" in host_upper:
+            detected_dev_type = "Server"
+            dev_conf = "High"
         else:
             if_name_lower = (context.get("interface_name") or "").lower()
             detected_dev_type = "Laptop" if ("wi" in if_name_lower or "wlan" in if_name_lower) else "Desktop"
+            dev_conf = "Medium"
 
         # Scan local listening ports
         local_open_ports = []
@@ -555,7 +574,7 @@ class NetworkDiscoveryService:
                 detected_services.append(srv)
 
         return {
-            "ip_address": context["ip_address"],
+            "ip_address": ip,
             "mac_address": context.get("mac_address"),
             "hostname": host_name,
             "vendor": vendor,
@@ -564,7 +583,7 @@ class NetworkDiscoveryService:
             "os_confidence": "High",
             "architecture": arch,
             "device_type": detected_dev_type,
-            "device_type_confidence": "High",
+            "device_type_confidence": dev_conf,
             "open_ports": json.dumps(sorted(local_open_ports[:25])),
             "detected_services": json.dumps(detected_services[:25]),
             "interface_name": context.get("interface_name", "Wi-Fi"),
@@ -682,14 +701,27 @@ class NetworkDiscoveryService:
     async def fingerprint_node(self, ip: str, mac: Optional[str], default_gw_ip: Optional[str]) -> Dict[str, Any]:
         """
         Enrich discovered node with real verified hostname, vendor, operating system, and device type.
-        Calculates device_type, device_type_confidence, os_type, os_confidence, open_ports, detected_services.
+        Calculates device_type, device_type_confidence, os_type, os_version, os_confidence, open_ports, detected_services.
         """
+        # 1. Real Hostname Resolution (Priority: NetBIOS -> Reverse DNS PTR)
         hostname = resolve_hostname(ip)
-        vendor = get_vendor_by_mac(mac)
-        is_gw = (ip == default_gw_ip)
+        # Guard: Never allow backend server hostname to be assigned to another IP
+        server_host = socket.gethostname()
+        if hostname and hostname.lower() == server_host.lower():
+            context = get_primary_host_network_context()
+            if ip != context.get("ip_address"):
+                hostname = None
 
-        # Probe ports for evidence
-        probe_ports = [53, 67, 80, 443, 9100, 515, 631, 135, 139, 445, 3389, 5357, 22, 8008, 8009, 1900, 1883, 5000, 8080, 8443]
+        # 2. Hardware Vendor Lookup (IEEE OUI or Private / Randomized MAC)
+        vendor = get_vendor_by_mac(mac)
+
+        is_gw = (ip == default_gw_ip and default_gw_ip is not None)
+
+        # 3. Active Port Probes for Evidence
+        probe_ports = [
+            53, 67, 80, 443, 9100, 515, 631, 135, 139, 445, 3389, 5357,
+            22, 8008, 8009, 1900, 1883, 5000, 8080, 8443, 3306, 5432, 27017, 6379
+        ]
         open_ports = []
         for port in probe_ports:
             try:
@@ -709,145 +741,132 @@ class NetworkDiscoveryService:
             if srv and srv not in detected_services:
                 detected_services.append(srv)
 
-        # Evidence-based classification
-        device_type = "Unknown"
-        device_type_confidence = "Low"
-        os_type = None
+        # 4. OS Fingerprinting (Evidence-driven)
+        os_type = "Unknown"
         os_version = None
         os_confidence = "Low"
-        architecture = None
 
         hostname_upper = (hostname or "").upper()
         vendor_lower = (vendor or "").lower()
 
-        # 1. FIREWALL CLASSIFICATION
+        # Check evidence stacks
+        has_win_ports = any(p in open_ports for p in [135, 445, 3389, 5357])
+        has_ssh = (22 in open_ports)
+        has_print_ports = any(p in open_ports for p in [9100, 515, 631])
+        has_iot_ports = any(p in open_ports for p in [554, 1883, 8008, 8009, 1900, 5000, 7000])
+
+        if any(f in vendor_lower for f in ["pfsense", "opnsense", "fortinet", "fortigate", "palo alto", "sophos", "sonicwall", "check point", "firewalla"]):
+            os_type = "Firewall OS / Firmware"
+            os_confidence = "High"
+        elif is_gw or any(r in vendor_lower for r in ["cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel", "openwrt", "dd-wrt", "asus", "tenda", "arista"]):
+            os_type = "RouterOS / Embedded Linux"
+            os_confidence = "High" if is_gw else "Medium"
+        elif has_print_ports or (vendor and any(p in vendor_lower for p in ["canon", "epson", "brother", "xerox", "lexmark", "kyocera", "ricoh", "konica", "fuji", "hewlett-packard printer", "hp laserjet"])):
+            os_type = "Printer Firmware"
+            os_confidence = "High" if has_print_ports else "Medium"
+        elif has_iot_ports or (vendor and any(i in vendor_lower for i in ["espressif", "tuya", "sonos", "roku", "amazon", "nest", "ring", "hue", "philips lighting", "hikvision", "dahua", "wyze", "reolink", "smart tv", "bravia", "chromecast", "playstation", "xbox", "nintendo"])):
+            os_type = "Embedded Linux / IoT"
+            os_confidence = "Medium"
+        elif vendor and any(m in vendor_lower for m in ["samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "realme", "honor", "tecno", "infinix"]):
+            os_type = "Android"
+            os_confidence = "Medium"
+        elif (vendor and "apple" in vendor_lower) or any(a in hostname_upper for a in ["IPHONE", "IPAD", "MACBOOK", "IMAC", "APPLE-TV"]):
+            if "IPHONE" in hostname_upper or "IPAD" in hostname_upper:
+                os_type = "iOS"
+                os_confidence = "High"
+            elif "MACBOOK" in hostname_upper or "IMAC" in hostname_upper:
+                os_type = "macOS"
+                os_confidence = "High"
+            else:
+                os_type = "macOS / iOS"
+                os_confidence = "Medium"
+        elif has_win_ports:
+            os_type = "Windows"
+            os_confidence = "High" if (135 in open_ports and 445 in open_ports) else "Medium"
+        elif has_ssh:
+            os_type = "Linux"
+            os_confidence = "Medium"
+        else:
+            os_type = "Unknown"
+            os_confidence = "Low"
+
+        # 5. Device Type Classification (10 Evidence-Based Categories)
+        device_type = "Unknown"
+        device_type_confidence = "Low"
+
+        # 1. FIREWALL
         if any(f in vendor_lower for f in ["pfsense", "opnsense", "fortinet", "fortigate", "palo alto", "sophos", "sonicwall", "check point", "firewalla", "smoothwall"]) or \
            any(f in hostname_upper for f in ["PFSENSE", "OPNSENSE", "FORTIGATE", "PALOALTO", "SOPHOS", "SONICWALL", "FIREWALL", "FW-", "NETGUARD-FW"]):
             device_type = "Firewall"
             device_type_confidence = "High"
-            os_type = "Firewall OS / Firmware"
-            os_confidence = "High"
 
-        # 2. ROUTER / GATEWAY CLASSIFICATION
+        # 2. ROUTER / GATEWAY
         elif is_gw:
             device_type = "Router"
             device_type_confidence = "High"
             if not vendor:
-                vendor = "Network Gateway / Router"
-            if 53 in open_ports and 80 not in open_ports and 443 not in open_ports:
-                os_type = "Mobile OS (Hotspot)"
-                os_confidence = "Medium"
-            else:
-                os_type = "RouterOS / Firmware"
-                os_confidence = "Medium"
+                vendor = "Network Gateway"
         elif any(r in vendor_lower for r in ["cisco", "tp-link", "netgear", "ubiquiti", "mikrotik", "d-link", "linksys", "zyxel", "openwrt", "dd-wrt", "asus", "tenda", "arista"]) or \
              any(r in hostname_upper for r in ["ROUTER", "GATEWAY", "MIKROTIK", "ROUTEROS", "OPENWRT", "DDWRT", "AP-", "ACCESS-POINT", "HOTSPOT", "WIFI-ROUTER"]):
             device_type = "Router"
             device_type_confidence = "High" if (53 in open_ports or 67 in open_ports or 80 in open_ports) else "Medium"
-            os_type = "RouterOS / Firmware"
-            os_confidence = "Medium"
         elif (53 in open_ports or 67 in open_ports) and (80 in open_ports or 443 in open_ports or 8080 in open_ports or 8443 in open_ports) and not any(s in hostname_upper for s in ["SERVER", "SRV", "UBUNTU", "DEBIAN", "WIN-"]):
             device_type = "Router"
             device_type_confidence = "Medium"
-            os_type = "RouterOS / Firmware"
-            os_confidence = "Low"
 
-        # 3. SWITCH CLASSIFICATION
+        # 3. SWITCH
         elif any(s in vendor_lower for s in ["catalyst", "edgeswitch", "prosafe", "procurve", "aruba", "juniper"]) or \
              any(s in hostname_upper for s in ["SWITCH", "SW-", "CATALYST", "EDGESWITCH", "PROSAFE", "PROCURVE", "ARUBA-SW"]):
             device_type = "Switch"
             device_type_confidence = "High"
-            os_type = "Switch Firmware"
-            os_confidence = "High"
 
-        # 4. PRINTER CLASSIFICATION
-        elif 9100 in open_ports or 515 in open_ports or 631 in open_ports:
+        # 4. PRINTER
+        elif has_print_ports:
             device_type = "Printer"
             device_type_confidence = "High"
-            os_type = "Printer Firmware"
-            os_confidence = "High"
         elif vendor and any(p in vendor_lower for p in ["printer", "canon", "epson", "brother", "xerox", "lexmark", "kyocera", "ricoh", "konica", "fuji", "hewlett-packard printer", "hp laserjet"]):
             device_type = "Printer"
             device_type_confidence = "High" if (80 in open_ports or 443 in open_ports) else "Medium"
-            os_type = "Printer Firmware"
-            os_confidence = "Medium"
         elif any(p in hostname_upper for p in ["PRINTER", "HP-LASER", "EPSON", "CANON", "BROTHER", "DIRECT-", "MFP", "COPIER"]):
             device_type = "Printer"
             device_type_confidence = "High"
-            os_type = "Printer Firmware"
-            os_confidence = "Medium"
 
-        # 5. IOT / SMART HOME / MEDIA CLASSIFICATION
-        elif any(p in open_ports for p in [554, 1883, 8008, 8009, 1900, 5000, 7000]) or \
-             (vendor and any(i in vendor_lower for i in ["espressif", "tuya", "sonos", "roku", "amazon", "nest", "ring", "hue", "philips lighting", "hikvision", "dahua", "wyze", "reolink", "smart tv", "bravia", "chromecast", "playstation", "xbox", "nintendo"])):
+        # 5. IOT / SMART HOME / MEDIA
+        elif has_iot_ports or (vendor and any(i in vendor_lower for i in ["espressif", "tuya", "sonos", "roku", "amazon", "nest", "ring", "hue", "philips lighting", "hikvision", "dahua", "wyze", "reolink", "smart tv", "bravia", "chromecast", "playstation", "xbox", "nintendo"])):
             device_type = "IoT"
-            device_type_confidence = "High"
-            os_type = "Embedded Linux / IoT"
-            os_confidence = "Medium"
+            device_type_confidence = "High" if has_iot_ports else "Medium"
         elif any(i in hostname_upper for i in ["TV", "CHROMECAST", "ROKU", "ECHO", "SMART", "IOT", "CAM", "SONOS", "ALEXA", "APPLE-TV", "HOME-ASSISTANT", "TPLINK-PLUG", "WEMO", "ESP32", "ESP8266"]):
             device_type = "IoT"
             device_type_confidence = "High"
-            os_type = "Embedded Linux / IoT"
-            os_confidence = "Medium"
 
-        # 6. MOBILE PHONE / TABLET CLASSIFICATION
-        elif (vendor and any(m in vendor_lower for m in ["samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "realme", "honor", "tecno", "infinix"])) or \
-             (vendor and "apple" in vendor_lower and not any(a in hostname_upper for a in ["MACBOOK", "IMAC", "MAC-MINI", "MACPRO"])):
+        # 6. MOBILE PHONE / TABLET
+        elif vendor and any(m in vendor_lower for m in ["samsung", "xiaomi", "oneplus", "huawei", "vivo", "oppo", "pixel", "motorola", "realme", "honor", "tecno", "infinix"]):
             device_type = "Mobile"
             device_type_confidence = "High"
-            os_type = "iOS" if "apple" in vendor_lower else "Android"
-            os_confidence = "Medium"
         elif any(m in hostname_upper for m in ["IPHONE", "IPAD", "ANDROID", "GALAXY", "PIXEL", "REDMI", "ONEPLUS", "VIVO", "OPPO", "REALME", "SM-", "M20", "M21", "CPH", "RMX", "PHONE", "TABLET"]):
             device_type = "Mobile"
             device_type_confidence = "High"
-            os_type = "iOS" if ("IPHONE" in hostname_upper or "IPAD" in hostname_upper) else "Android"
-            os_confidence = "High"
-        elif mac and is_locally_administered_mac(mac) and not (135 in open_ports or 445 in open_ports or 22 in open_ports or 3389 in open_ports):
-            device_type = "Mobile"
-            device_type_confidence = "Medium"
-            os_type = "Android / iOS (Private Wi-Fi MAC)"
-            os_confidence = "Medium"
 
-        # 7. SERVER CLASSIFICATION
-        elif any(s in hostname_upper for s in ["SRV", "SERVER", "PROXMOX", "ESXI", "VSPHERE", "UBUNTU-SERVER", "DEBIAN", "RHEL", "CENTOS", "ROCKY", "ALMALINUX", "FEDORA-SERVER", "PIHOLE", "NAS", "SYNOLOGY", "QNAP", "TRUENAS", "FREEBOOT", "DOCKER", "K8S", "KUBERNETES", "NODE-", "DB-", "DATABASE", "PROD-", "STAGE-", "DEV-SERVER"]):
+        # 7. SERVER
+        elif any(p in open_ports for p in [3306, 5432, 27017, 6379, 1521, 1433]) or \
+             any(s in hostname_upper for s in ["SRV-", "SERVER-", "PROXMOX", "ESXI", "VSPHERE", "UBUNTU-SERVER", "DEBIAN-SERVER", "RHEL-SERVER", "CENTOS-SERVER", "PIHOLE", "NAS", "SYNOLOGY", "QNAP", "TRUENAS", "FREEBOOT", "DOCKER-", "K8S-", "KUBERNETES", "NODE-", "DB-", "DATABASE", "PROD-", "DEV-SERVER"]):
             device_type = "Server"
             device_type_confidence = "High"
-            os_type = "Linux" if any(l in hostname_upper for l in ["UBUNTU", "DEBIAN", "RHEL", "CENTOS", "LINUX"]) else "Server OS"
-            os_confidence = "High"
-        elif any(p in open_ports for p in [3306, 5432, 27017, 6379, 1521, 1433]):
-            device_type = "Server"
-            device_type_confidence = "High"
-            os_type = "Windows Server" if (135 in open_ports or 445 in open_ports) else "Linux / Database Server"
-            os_confidence = "High"
 
-        # 8. LAPTOP CLASSIFICATION
+        # 8. LAPTOP
         elif any(h in hostname_upper for h in ["LAPTOP-", "NOTEBOOK", "THINKPAD", "MACBOOK", "SURFACE", "ENVY", "PAVILION", "IDEAPAD", "ZENBOOK", "XPS", "LATITUDE", "PRECISION", "INSPIRON", "ELITEBOOK", "PROBOOK", "YOGA", "SWIFT", "GRAM"]):
             device_type = "Laptop"
             device_type_confidence = "High"
-            os_type = "macOS" if "MACBOOK" in hostname_upper else "Windows"
-            os_confidence = "High"
 
-        # 9. DESKTOP CLASSIFICATION
+        # 9. DESKTOP
         elif any(h in hostname_upper for h in ["DESKTOP-", "PC-", "WORKSTATION", "RIG-", "TOWER", "OPTIPLEX", "VOSTRO", "VERITON", "THINKCENTRE", "PRODESK", "ELITEDESK", "ALL-IN-ONE", "AIO", "MINIPC"]):
             device_type = "Desktop"
             device_type_confidence = "High"
-            os_type = "Windows"
-            os_confidence = "High"
 
         # 10. UNKNOWN (Insufficient Evidence - NEVER default arbitrarily to Desktop)
         else:
             device_type = "Unknown"
             device_type_confidence = "Low"
-            # Set detectable OS if open ports indicate it, but do NOT assume Desktop hardware
-            if 135 in open_ports or 445 in open_ports or 3389 in open_ports or 5357 in open_ports:
-                os_type = "Windows"
-                os_confidence = "High"
-            elif 22 in open_ports:
-                os_type = "Linux"
-                os_confidence = "Medium"
-            else:
-                os_type = None
-                os_confidence = "Low"
 
         return {
             "ip_address": ip,
@@ -857,7 +876,7 @@ class NetworkDiscoveryService:
             "os_type": os_type,
             "os_version": os_version,
             "os_confidence": os_confidence,
-            "architecture": architecture,
+            "architecture": None,
             "device_type": device_type,
             "device_type_confidence": device_type_confidence,
             "open_ports": json.dumps(open_ports),
@@ -869,8 +888,8 @@ class NetworkDiscoveryService:
         """
         Execute full dynamic network discovery:
         1. Automatically detect active physical Wi-Fi/Ethernet subnet (e.g. 172.23.230.0/24).
-        2. Clean up any stale link-local (169.254.x.x) or virtual adapter entries.
-        3. Register host laptop as a SINGLE device with secondary interfaces attached.
+        2. Clean up any stale link-local (169.254.x.x), virtual adapter, or leaked cloud container entries.
+        3. Register local host workstation as a single device if on a real physical LAN.
         4. Probe active subnets to stimulate ARP resolution for all connected clients.
         5. Parse OS ARP cache for active IP / MAC pairs on the monitored subnet.
         6. Synchronize into database using MAC address identity.
@@ -884,17 +903,18 @@ class NetworkDiscoveryService:
         active_ips: Set[str] = set()
         synced_devices: List[Device] = []
 
-        # 1. Clean up legacy link-local or virtual adapter devices
+        # 1. Clean up legacy link-local, virtual adapter, or leaked cloud container devices
+        server_host = socket.gethostname()
         host_device_data = self.get_local_host_device()
-        primary_host_ip = host_device_data["ip_address"]
-        host_hostname = host_device_data["hostname"]
+        primary_host_ip = host_device_data["ip_address"] if host_device_data else "127.0.0.1"
 
-        # Delete any 169.254.x.x devices or fake duplicate entries carrying the laptop hostname
         cleanup_query = select(Device).where(
             (Device.ip_address.like("169.254.%")) |
             (Device.ip_address == "192.168.56.1") |
             (Device.ip_address == "172.30.205.46") |
-            ((Device.hostname == host_hostname) & (Device.ip_address != primary_host_ip))
+            ((Device.hostname == server_host) & (Device.ip_address != primary_host_ip)) |
+            (Device.hostname.like("srv-%-hibernate-%")) |
+            (Device.os_version.like("%-aws%"))
         )
         stale_virtual_res = await db.execute(cleanup_query)
         stale_virtual_devs = stale_virtual_res.scalars().all()
@@ -902,10 +922,11 @@ class NetworkDiscoveryService:
             await db.delete(sv)
         await db.flush()
 
-        # 2. Upsert the single local host laptop device
-        active_ips.add(primary_host_ip)
-        host_dev = await self._upsert_device(db, host_device_data, now)
-        synced_devices.append(host_dev)
+        # 2. Upsert the local host device if on an on-prem physical LAN
+        if host_device_data:
+            active_ips.add(primary_host_ip)
+            host_dev = await self._upsert_device(db, host_device_data, now)
+            synced_devices.append(host_dev)
 
         # 3. Trigger active probe on the monitored physical subnets
         if active_subnets:
@@ -915,7 +936,7 @@ class NetworkDiscoveryService:
         arp_map = self.read_system_arp_table(active_subnets, primary_host_ip)
         logger.info(f"Discovered {len(arp_map)} live ARP entries on monitored subnet(s).")
 
-        # 5. Fingerprint and Upsert each discovered ARP node (Gateway, Mobile B, etc.)
+        # 5. Fingerprint and Upsert each discovered ARP node (Gateway, clients, etc.)
         for ip, mac in arp_map.items():
             active_ips.add(ip)
             node_data = await self.fingerprint_node(ip, mac, default_gw_ip)
@@ -943,6 +964,7 @@ class NetworkDiscoveryService:
         """
         Upsert device by MAC address identity (or fallback to IP).
         Handles dynamic IP reassignment without creating duplicate records.
+        Preserves verified historical metadata against weaker new evidence.
         """
         mac = data.get("mac_address")
         ip = data["ip_address"]
@@ -970,29 +992,35 @@ class NetworkDiscoveryService:
             if mac and not dev.mac_address:
                 dev.mac_address = mac
 
-            if data.get("hostname") and (not dev.hostname or dev.hostname == dev.ip_address):
-                dev.hostname = data["hostname"]
+            new_hostname = data.get("hostname")
+            if new_hostname and new_hostname != ip and not new_hostname.startswith("127."):
+                dev.hostname = new_hostname
 
-            if data.get("vendor") and not dev.vendor:
-                dev.vendor = data["vendor"]
+            new_vendor = data.get("vendor")
+            if new_vendor and new_vendor not in ["Unknown", "Host Laptop / PC"]:
+                if not dev.vendor or dev.vendor in ["Unknown", "Private / Randomized MAC", "Host Laptop / PC"]:
+                    dev.vendor = new_vendor
 
-            if data.get("os_type"):
-                dev.os_type = data["os_type"]
-            if data.get("os_version"):
-                dev.os_version = data["os_version"]
-            if data.get("os_confidence"):
-                dev.os_confidence = data["os_confidence"]
-            if data.get("architecture"):
-                dev.architecture = data["architecture"]
+            new_os = data.get("os_type")
+            new_os_conf = data.get("os_confidence", "Low")
+            if new_os and new_os != "Unknown":
+                if not dev.os_type or dev.os_type == "Unknown" or new_os_conf == "High":
+                    dev.os_type = new_os
+                    dev.os_version = data.get("os_version")
+                    dev.os_confidence = new_os_conf
+            elif not dev.os_type:
+                dev.os_type = "Unknown"
+                dev.os_confidence = "Low"
 
-            if data.get("device_type"):
-                # Overwrite if current is Unknown/workstation or new confidence is High
-                if dev.device_type in ["Unknown", "workstation"] or data.get("device_type_confidence") == "High":
-                    dev.device_type = data["device_type"]
-                    dev.device_type_confidence = data.get("device_type_confidence", "Low")
-                elif not dev.device_type:
-                    dev.device_type = data["device_type"]
-                    dev.device_type_confidence = data.get("device_type_confidence", "Low")
+            new_type = data.get("device_type")
+            new_type_conf = data.get("device_type_confidence", "Low")
+            if new_type and new_type != "Unknown":
+                if not dev.device_type or dev.device_type in ["Unknown", "workstation"] or new_type_conf == "High":
+                    dev.device_type = new_type
+                    dev.device_type_confidence = new_type_conf
+            elif not dev.device_type:
+                dev.device_type = "Unknown"
+                dev.device_type_confidence = "Low"
 
             ports_raw = data.get("open_ports")
             if ports_raw is not None:
@@ -1017,11 +1045,11 @@ class NetworkDiscoveryService:
                 mac_address=mac,
                 hostname=data.get("hostname"),
                 vendor=data.get("vendor"),
-                os_type=data.get("os_type"),
+                os_type=data.get("os_type") or "Unknown",
                 os_version=data.get("os_version"),
                 os_confidence=data.get("os_confidence", "Low"),
                 architecture=data.get("architecture"),
-                device_type=data.get("device_type", "Unknown"),
+                device_type=data.get("device_type") or "Unknown",
                 device_type_confidence=data.get("device_type_confidence", "Low"),
                 open_ports=ports_str,
                 detected_services=services_str,
@@ -1036,7 +1064,7 @@ class NetworkDiscoveryService:
 
             iface = NetworkInterface(
                 device_id=dev.id,
-                interface_name=data.get("interface_name", "Wi-Fi"),
+                interface_name=data.get("interface_name", "eth0"),
                 ip_address=ip,
                 mac_address=mac,
                 is_primary=True
