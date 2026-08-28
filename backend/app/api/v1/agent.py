@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from backend.app.schemas.metrics import (
 )
 from backend.app.websocket.manager import ws_manager
 
+logger = logging.getLogger("netguard.agent")
 router = APIRouter(prefix="/agent", tags=["Monitoring Agent Telemetry Ingestion"])
 
 
@@ -40,12 +42,14 @@ async def agent_heartbeat(
             status="ONLINE"
         )
         db.add(hb)
+        logger.info(f"New agent registered: {payload.hostname} ({payload.ip_address}) - {payload.os_name} v{payload.agent_version}")
     else:
         hb.ip_address = payload.ip_address
         hb.os_name = payload.os_name
         hb.agent_version = payload.agent_version
         hb.last_heartbeat = now
         hb.status = "ONLINE"
+        logger.info(f"Agent heartbeat received: {payload.hostname} ({payload.ip_address})")
 
     # Automatically register / update real host in Device inventory
     from backend.app.collectors.discovery import discovery_service, get_vendor_by_mac
@@ -107,27 +111,66 @@ async def ingest_host_metrics(
     )
     db.add(metric)
 
+    # Look up IP address from heartbeats or devices
+    ip_addr = payload.ip_address
+    if not ip_addr:
+        hb_stmt = select(AgentHeartbeat).where(AgentHeartbeat.hostname == payload.hostname)
+        hb = (await db.execute(hb_stmt)).scalars().first()
+        if hb:
+            ip_addr = hb.ip_address
+
     # Sync Device status if device matching hostname exists
     dev_stmt = select(Device).where(Device.hostname == payload.hostname)
     dev = (await db.execute(dev_stmt)).scalars().first()
     if dev:
         dev.last_seen = now
         dev.status = "ONLINE" if status_str == "HEALTHY" else status_str
+        if not ip_addr:
+            ip_addr = dev.ip_address
 
     await db.commit()
     await db.refresh(metric)
 
+    logger.info(
+        f"Agent metrics stored for {payload.hostname} ({ip_addr or 'N/A'}) - "
+        f"CPU: {payload.cpu_percent}%, RAM: {payload.ram_percent}%, Disk: {payload.disk_percent}%, "
+        f"Uptime: {payload.uptime_seconds}s, Status: {status_str}"
+    )
+
     # Broadcast real-time host metric update
     await ws_manager.broadcast("health_metric", {
+        "id": metric.id,
+        "host_id": host_id,
         "hostname": payload.hostname,
+        "ip_address": ip_addr,
+        "os_name": payload.os_name or "Generic OS",
         "cpu_percent": payload.cpu_percent,
         "ram_percent": payload.ram_percent,
         "disk_percent": payload.disk_percent,
+        "uptime_seconds": payload.uptime_seconds,
         "status": status_str,
-        "recorded_at": now.isoformat()
+        "recorded_at": now.isoformat(),
+        "last_seen": now.isoformat(),
+        "is_stale": False
     })
 
-    return metric
+    return HealthMetricResponse(
+        id=metric.id,
+        host_id=metric.host_id,
+        hostname=metric.hostname,
+        ip_address=ip_addr,
+        os_name=metric.os_name,
+        cpu_percent=metric.cpu_percent,
+        ram_percent=metric.ram_percent,
+        disk_percent=metric.disk_percent,
+        network_in_bytes=metric.network_in_bytes,
+        network_out_bytes=metric.network_out_bytes,
+        uptime_seconds=metric.uptime_seconds,
+        status=status_str,
+        recorded_at=metric.recorded_at,
+        last_seen=now,
+        is_stale=False
+    )
 
 
 @router.post("/discovery-sync")

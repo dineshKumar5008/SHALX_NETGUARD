@@ -274,6 +274,7 @@ export interface HealthMetric {
   id: number;
   host_id: string;
   hostname: string;
+  ip_address?: string;
   os_name?: string;
   cpu_percent: number;
   ram_percent: number;
@@ -281,8 +282,37 @@ export interface HealthMetric {
   network_in_bytes: number;
   network_out_bytes: number;
   uptime_seconds: number;
-  status: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'OFFLINE';
+  status: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'OFFLINE' | string;
   recorded_at: string;
+  last_seen?: string;
+  is_stale?: boolean;
+}
+
+export interface ServerSelfHealth {
+  hostname: string;
+  os_name: string;
+  cpu_percent: number;
+  ram_percent: number;
+  disk_percent: number;
+  ram_used_gb: number;
+  ram_total_gb: number;
+  disk_free_gb: number;
+  disk_total_gb: number;
+  uptime_seconds: number;
+  status: string;
+  thresholds: { [key: string]: number };
+}
+
+export interface DiscoveredDeviceTelemetryStatus {
+  device_id: number;
+  hostname?: string;
+  ip_address: string;
+  mac_address?: string;
+  vendor?: string;
+  device_type: string;
+  has_agent: boolean;
+  telemetry_status: string;
+  last_seen?: string;
 }
 
 export interface DashboardSummary {

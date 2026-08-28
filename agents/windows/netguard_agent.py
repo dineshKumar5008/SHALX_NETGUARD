@@ -109,14 +109,24 @@ def send_payload(endpoint: str, data: dict) -> bool:
 
 def collect_metrics() -> dict:
     """Collect Windows resource utilization telemetry."""
+    ip, _ = get_ip_and_mac()
     cpu_pct = psutil.cpu_percent(interval=1)
     ram = psutil.virtual_memory()
-    disk = psutil.disk_usage('C:\\')
+
+    # Safe root drive detection
+    drive = os.path.splitdrive(os.getcwd())[0]
+    disk_path = drive + "\\" if drive else "C:\\"
+    try:
+        disk = psutil.disk_usage(disk_path)
+    except Exception:
+        disk = psutil.disk_usage('C:\\')
+
     net_io = psutil.net_io_counters()
     uptime = int(time.time() - psutil.boot_time())
 
     return {
         "hostname": HOSTNAME,
+        "ip_address": ip,
         "os_name": f"Windows {platform.release()}",
         "cpu_percent": round(cpu_pct, 1),
         "ram_percent": round(ram.percent, 1),

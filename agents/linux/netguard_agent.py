@@ -120,6 +120,7 @@ def send_payload(endpoint: str, data: dict) -> bool:
 
 def collect_metrics() -> dict:
     """Sample CPU, RAM, Disk, and Network telemetry."""
+    ip, _ = get_ip_and_mac()
     cpu_pct = psutil.cpu_percent(interval=1)
     ram = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
@@ -128,6 +129,7 @@ def collect_metrics() -> dict:
 
     return {
         "hostname": HOSTNAME,
+        "ip_address": ip,
         "os_name": f"Linux ({platform.system()} {platform.release()})",
         "cpu_percent": round(cpu_pct, 1),
         "ram_percent": round(ram.percent, 1),

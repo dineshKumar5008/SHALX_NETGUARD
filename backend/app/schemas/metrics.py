@@ -23,6 +23,7 @@ class TrafficMetricResponse(BaseModel):
 
 class HealthMetricCreate(BaseModel):
     hostname: str
+    ip_address: Optional[str] = None
     os_name: Optional[str] = None
     cpu_percent: float
     ram_percent: float
@@ -37,8 +38,22 @@ class HealthMetricResponse(HealthMetricCreate):
     host_id: str
     status: str
     recorded_at: datetime
+    last_seen: Optional[datetime] = None
+    is_stale: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DiscoveredDeviceTelemetryStatus(BaseModel):
+    device_id: int
+    hostname: Optional[str] = None
+    ip_address: str
+    mac_address: Optional[str] = None
+    vendor: Optional[str] = None
+    device_type: str = "Unknown"
+    has_agent: bool = False
+    telemetry_status: str
+    last_seen: Optional[datetime] = None
 
 
 class AgentHeartbeatCreate(BaseModel):
