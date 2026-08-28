@@ -11,6 +11,7 @@ from backend.app.websocket.manager import ws_manager
 from backend.app.workers.background import background_worker
 from backend.app.models.user import User
 from backend.app.core.security import get_password_hash
+from backend.app.services.mfa_service import mfa_service
 from sqlalchemy.future import select
 
 # Configure structured logging
