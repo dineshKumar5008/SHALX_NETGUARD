@@ -330,6 +330,12 @@ export interface DashboardSummary {
   firewall_status: string;
   agent_count: number;
   development_mode: boolean;
+  severity_distribution?: {
+    CRITICAL: number;
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+  };
 }
 
 export interface NotificationSetting {

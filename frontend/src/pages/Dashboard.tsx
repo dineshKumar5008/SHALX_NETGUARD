@@ -92,7 +92,23 @@ export const Dashboard: React.FC = () => {
 
     const unAlert = subscribe('alert', (alert) => {
       setRecentAlerts((prev) => [alert, ...prev.slice(0, 7)]);
-      setSummary((prev) => prev ? { ...prev, active_alerts: prev.active_alerts + 1 } : null);
+      setSummary((prev) => {
+        if (!prev) return null;
+        const rawSev = (alert.severity || '').toUpperCase();
+        const sevKey = rawSev in { CRITICAL: 1, HIGH: 1, MEDIUM: 1, LOW: 1 }
+          ? (rawSev as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW')
+          : null;
+        const currentDist = prev.severity_distribution || { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+        const updatedDist = sevKey
+          ? { ...currentDist, [sevKey]: (currentDist[sevKey] || 0) + 1 }
+          : currentDist;
+        return {
+          ...prev,
+          active_alerts: prev.active_alerts + 1,
+          critical_alerts: sevKey === 'CRITICAL' ? prev.critical_alerts + 1 : prev.critical_alerts,
+          severity_distribution: updatedDist,
+        };
+      });
     });
 
     const interval = setInterval(fetchDashboardData, 15000);
@@ -107,19 +123,29 @@ export const Dashboard: React.FC = () => {
     return <LoadingSpinner message="Connecting to SHALX NETGUARD SOC Engine..." />;
   }
 
-  // Severity Distribution Data
-  const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-  recentAlerts.forEach((a) => {
-    const s = a.severity as keyof typeof severityCounts;
-    if (severityCounts[s] !== undefined) severityCounts[s]++;
-  });
+  // Real Severity Distribution Data (from backend database inventory)
+  const severityCounts = {
+    CRITICAL: summary?.severity_distribution?.CRITICAL ?? 0,
+    HIGH: summary?.severity_distribution?.HIGH ?? 0,
+    MEDIUM: summary?.severity_distribution?.MEDIUM ?? 0,
+    LOW: summary?.severity_distribution?.LOW ?? 0,
+  };
 
-  const severityChartData = [
-    { name: 'Critical', value: severityCounts.CRITICAL || 1, color: '#f43f5e' },
-    { name: 'High', value: severityCounts.HIGH || 2, color: '#f97316' },
-    { name: 'Medium', value: severityCounts.MEDIUM || 3, color: '#f59e0b' },
-    { name: 'Low', value: severityCounts.LOW || 4, color: '#38bdf8' },
+  const totalActiveThreats =
+    severityCounts.CRITICAL + severityCounts.HIGH + severityCounts.MEDIUM + severityCounts.LOW;
+
+  const severityBreakdown = [
+    { name: 'Critical', value: severityCounts.CRITICAL, color: '#f43f5e' },
+    { name: 'High', value: severityCounts.HIGH, color: '#f97316' },
+    { name: 'Medium', value: severityCounts.MEDIUM, color: '#f59e0b' },
+    { name: 'Low', value: severityCounts.LOW, color: '#38bdf8' },
   ];
+
+  // Visual donut chart data: renders active threat slices, or a neutral ring when 0 threats exist
+  const donutChartData =
+    totalActiveThreats > 0
+      ? severityBreakdown.filter((item) => item.value > 0)
+      : [{ name: 'No Active Threats', value: 1, color: '#1e293b' }];
 
   // Protocol distribution data
   const protoData = [
@@ -298,39 +324,61 @@ export const Dashboard: React.FC = () => {
 
         {/* Severity Distribution Donut Chart */}
         <Card title="Alert Severity Distribution" subtitle="Active threat profile breakdown">
-          <div className="h-48 w-full flex items-center justify-center">
+          <div className="relative h-48 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={severityChartData}
+                  data={donutChartData}
                   cx="50%"
                   cy="50%"
                   innerRadius={50}
                   outerRadius={75}
-                  paddingAngle={4}
+                  paddingAngle={totalActiveThreats > 1 ? 4 : 0}
                   dataKey="value"
                 >
-                  {severityChartData.map((entry, index) => (
+                  {donutChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0a0d14',
-                    borderColor: '#1e293b',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontFamily: 'monospace',
+                  content={({ active, payload }: any) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0];
+                      const isZero = totalActiveThreats === 0;
+                      return (
+                        <div className="bg-slate-900 border border-slate-700/80 rounded-lg p-2.5 shadow-2xl text-xs font-mono">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: isZero ? '#64748b' : (data.payload?.color || data.color) }}
+                            />
+                            <span className="text-slate-300 font-semibold">{isZero ? 'Status' : data.name}:</span>
+                            <span className="text-slate-100 font-bold">{isZero ? '0 Threats' : `${data.value} Alert${data.value === 1 ? '' : 's'}`}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
               </PieChart>
             </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className={`text-xl font-bold font-mono ${totalActiveThreats > 0 ? 'text-slate-100' : 'text-slate-400'}`}>
+                {totalActiveThreats}
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                {totalActiveThreats === 0 ? 'Threats' : totalActiveThreats === 1 ? 'Threat' : 'Threats'}
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-[#1e293b]">
-            {severityChartData.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-xs font-mono">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-slate-400">{item.name}:</span>
+            {severityBreakdown.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between text-xs font-mono">
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  {item.name}:
+                </span>
                 <span className="font-bold text-slate-200">{item.value}</span>
               </div>
             ))}

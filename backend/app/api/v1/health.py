@@ -46,7 +46,15 @@ async def get_dashboard_summary(
         )
     )
     active_alerts = alert_res.scalars().all()
-    crit_alerts = len([a for a in active_alerts if a.severity.upper() == "CRITICAL"])
+
+    # Exact database alert severity distribution (normalized, real alerts only)
+    sev_dist = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for a in active_alerts:
+        s_norm = (a.severity or "").strip().upper()
+        if s_norm in sev_dist:
+            sev_dist[s_norm] += 1
+
+    crit_alerts = sev_dist["CRITICAL"]
 
     # Incidents (Real incidents only)
     inc_res = await db.execute(
@@ -100,7 +108,8 @@ async def get_dashboard_summary(
         "zeek_status": "ONLINE" if zeek_ok else "STANDBY",
         "firewall_status": "CONNECTED" if fw_status.get("is_connected") else "DISCONNECTED",
         "agent_count": len(agents),
-        "development_mode": settings.ENVIRONMENT.lower() == "dev"
+        "development_mode": settings.ENVIRONMENT.lower() == "dev",
+        "severity_distribution": sev_dist
     }
 
 

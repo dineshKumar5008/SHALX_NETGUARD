@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 
@@ -91,6 +91,9 @@ class DashboardSummary(BaseModel):
     firewall_status: str
     agent_count: int
     development_mode: bool
+    severity_distribution: Dict[str, int] = Field(
+        default_factory=lambda: {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    )
 
 
 class DiscoveredNodePayload(BaseModel):
