@@ -22,7 +22,7 @@ async def test_production_health_endpoints(async_client: AsyncClient):
 
 
 def test_database_url_normalization():
-    """Verify PostgreSQL URL conversion to asyncpg driver."""
+    """Verify PostgreSQL URL conversion to asyncpg driver and Neon ssl compatibility."""
     s1 = Settings(DATABASE_URL="postgres://user:pass@host:5432/dbname")
     assert s1.DATABASE_URL == "postgresql+asyncpg://user:pass@host:5432/dbname"
 
@@ -31,6 +31,13 @@ def test_database_url_normalization():
 
     s3 = Settings(DATABASE_URL="sqlite+aiosqlite:///./custom.db")
     assert s3.DATABASE_URL == "sqlite+aiosqlite:///./custom.db"
+
+    # Neon SSL compatibility
+    s4 = Settings(DATABASE_URL="postgresql://user:pass@ep-pooler.region.aws.neon.tech/neondb?sslmode=require")
+    assert s4.DATABASE_URL == "postgresql+asyncpg://user:pass@ep-pooler.region.aws.neon.tech/neondb?ssl=require"
+
+    s5 = Settings(DATABASE_URL="postgres://user:pass@ep-pooler.region.aws.neon.tech/neondb?channel_binding=prefer&sslmode=require")
+    assert s5.DATABASE_URL == "postgresql+asyncpg://user:pass@ep-pooler.region.aws.neon.tech/neondb?ssl=require"
 
 
 def test_dynamic_cors_origins():

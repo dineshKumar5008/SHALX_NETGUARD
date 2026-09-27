@@ -9,14 +9,29 @@ logger = logging.getLogger("netguard.database")
 
 # Determine engine parameters based on database dialect
 connect_args = {}
+engine_kwargs = {
+    "echo": False,
+    "future": True,
+}
+
 if "sqlite" in settings.DATABASE_URL:
     connect_args["check_same_thread"] = False
+else:
+    # PostgreSQL / Neon PgBouncer pooled connection settings:
+    # 1. Disable client-side statement cache for transaction poolers (PgBouncer)
+    connect_args["statement_cache_size"] = 0
+    # 2. Resilient connection recycling & conservative pool limits for Render backend + Neon Free
+    engine_kwargs.update({
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_size": 5,
+        "max_overflow": 5,
+    })
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,
-    future=True,
     connect_args=connect_args,
+    **engine_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(

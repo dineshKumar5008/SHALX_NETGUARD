@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv
@@ -76,10 +77,23 @@ class Settings(BaseSettings):
         if not v:
             return "sqlite+aiosqlite:///./netguard.db"
         val = str(v).strip()
+        # 1. Normalize dialect scheme to asyncpg
         if val.startswith("postgres://"):
-            return val.replace("postgres://", "postgresql+asyncpg://", 1)
-        if val.startswith("postgresql://") and not val.startswith("postgresql+asyncpg://"):
-            return val.replace("postgresql://", "postgresql+asyncpg://", 1)
+            val = val.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif val.startswith("postgresql://") and not val.startswith("postgresql+asyncpg://"):
+            val = val.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        # 2. Convert sslmode to asyncpg-compatible ssl parameter without affecting other URL parameters
+        # asyncpg accepts ssl='require' (or boolean) but rejects sslmode with TypeError
+        if "sslmode=" in val:
+            val = re.sub(r'([?&])sslmode=', r'\1ssl=', val)
+
+        # 3. Strip parameters unsupported by asyncpg driver (e.g. channel_binding added by Neon)
+        if "channel_binding=" in val:
+            val = re.sub(r'([?&])channel_binding=[^&]*(&|$)', r'\1', val)
+            val = re.sub(r'[?&]$', '', val)
+            val = re.sub(r'\?&', '?', val)
+
         return val
 
     # Baseline Development & Local CORS
