@@ -3,61 +3,75 @@ import { Outlet, Link } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { useWebSocket } from '../../context/WebSocketContext';
-import { AlertTriangle, X, ShieldAlert } from 'lucide-react';
+import { X, ShieldAlert } from 'lucide-react';
 import { Alert } from '../../types';
 
 export const Layout: React.FC = () => {
   const { latestAlert } = useWebSocket();
   const [activeAlertToast, setActiveAlertToast] = useState<Alert | null>(null);
+  const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (latestAlert && (latestAlert.severity === 'CRITICAL' || latestAlert.severity === 'HIGH')) {
       setActiveAlertToast(latestAlert);
       const timer = setTimeout(() => {
         setActiveAlertToast(null);
-      }, 8000);
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [latestAlert]);
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col">
-      <Navbar />
+    <div className="min-h-screen bg-[#f4f7fb] text-slate-900 flex flex-row">
+      {/* Sidebar: persistent on desktop, responsive drawer on mobile */}
+      <Sidebar isOpenMobile={isMobileOpen} onCloseMobile={() => setIsMobileOpen(false)} />
 
-      {/* Real-time Alert Toast Banner */}
-      {activeAlertToast && (
-        <div className="bg-rose-950/90 border-b border-rose-600/80 px-6 py-2.5 flex items-center justify-between z-40 sticky top-16 shadow-lg shadow-rose-950/50 animate-bounce">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
-            <div>
-              <span className="font-mono text-xs font-bold text-rose-300 mr-2 uppercase tracking-wide">
-                [{activeAlertToast.severity} ALERT DETECTED]
-              </span>
-              <span className="text-xs text-slate-100 font-medium">
-                {activeAlertToast.title} ({activeAlertToast.source_ip} &rarr; {activeAlertToast.destination_ip})
-              </span>
+      {/* Main Content Area Column */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+        <Navbar onToggleMobileSidebar={() => setIsMobileOpen((prev) => !prev)} />
+
+        {/* Real-time Enterprise Incident Banner (Clean, High-Contrast) */}
+        {activeAlertToast && (
+          <div
+            role="alert"
+            className="bg-red-50 border-b border-red-200 px-5 sm:px-6 py-2.5 flex items-center justify-between z-20 sticky top-0 shadow-sm"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-6 h-6 rounded bg-red-100 border border-red-200 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-3.5 h-3.5 text-red-600" />
+              </div>
+              <div className="truncate">
+                <span className="font-mono text-[11px] font-bold text-red-800 mr-2 uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 border border-red-200">
+                  {activeAlertToast.severity}
+                </span>
+                <span className="text-xs text-slate-900 font-medium">
+                  {activeAlertToast.title}
+                </span>
+                <span className="text-xs font-mono text-slate-500 ml-2 hidden md:inline">
+                  ({activeAlertToast.source_ip} &rarr; {activeAlertToast.destination_ip})
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <Link
+                to={`/alerts/${activeAlertToast.id || ''}`}
+                className="text-xs font-mono bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg transition font-medium shadow-sm active:scale-[0.99]"
+              >
+                Triage Incident
+              </Link>
+              <button
+                onClick={() => setActiveAlertToast(null)}
+                aria-label="Dismiss alert"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded transition"
+              >
+                <X size={15} />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              to={`/alerts/${activeAlertToast.id || ''}`}
-              className="text-xs font-mono bg-rose-800 hover:bg-rose-700 text-white px-2.5 py-1 rounded transition"
-            >
-              Investigate Now
-            </Link>
-            <button
-              onClick={() => setActiveAlertToast(null)}
-              className="text-rose-400 hover:text-white p-1 rounded transition"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex-1 p-6 overflow-y-auto max-w-[1600px] w-full mx-auto">
+        {/* Main Routed Page Content */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1720px] w-full mx-auto min-w-0">
           <Outlet />
         </main>
       </div>

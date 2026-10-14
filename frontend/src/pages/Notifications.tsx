@@ -7,7 +7,7 @@ import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { 
-  BellRing, Mail, Send, RefreshCw, CheckCircle2, AlertCircle, Radio, Settings 
+  BellRing, Mail, Send, RefreshCw, CheckCircle2, AlertCircle, Radio, Settings, ShieldCheck
 } from 'lucide-react';
 
 export const Notifications: React.FC = () => {
@@ -25,8 +25,8 @@ export const Notifications: React.FC = () => {
         apiClient.get('/notifications/settings'),
         apiClient.get('/notifications/logs?limit=30'),
       ]);
-      setSettingsList(setRes.data);
-      setLogs(logsRes.data);
+      setSettingsList(setRes.data || []);
+      setLogs(logsRes.data || []);
     } catch (err) {
       console.error('Error fetching notification data:', err);
     } finally {
@@ -76,12 +76,12 @@ export const Notifications: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2.5">
-            <BellRing className="w-5 h-5 text-amber-400" />
-            <span>EXTERNAL SECURITY NOTIFICATIONS & ALERT DISPATCH</span>
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <BellRing className="w-5 h-5 text-blue-600" />
+            <span>Advisory Dispatch & Notifications</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Multi-Channel Incident Advisory Routing (Email SMTP, Telegram Bot, Webhooks)
+          <p className="text-xs text-slate-500 mt-1">
+            Multi-channel incident routing engine (Enterprise SMTP, Telegram Gateway, and Simulation Harness)
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={fetchNotificationData} icon={<RefreshCw size={13} />}>
@@ -90,8 +90,8 @@ export const Notifications: React.FC = () => {
       </div>
 
       {testStatus && (
-        <div className="p-3 bg-cyan-950/70 border border-cyan-800 text-xs font-mono text-cyan-300 rounded-lg flex items-center gap-2">
-          <CheckCircle2 size={15} />
+        <div className="p-3.5 bg-blue-50 border border-blue-200 text-xs font-mono text-blue-700 rounded-lg flex items-center gap-2.5 shadow-xs">
+          <CheckCircle2 size={16} className="text-blue-600 shrink-0" />
           <span>{testStatus}</span>
         </div>
       )}
@@ -99,80 +99,98 @@ export const Notifications: React.FC = () => {
       {/* Notification Channel Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Email SMTP Channel */}
-        <Card className="border-t-4 border-t-cyan-500">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Mail size={18} className="text-cyan-400" />
-              <h3 className="font-mono text-sm font-bold text-slate-100 uppercase">Email (SMTP)</h3>
+        <Card title="Email Service (SMTP)" subtitle="RFC-5322 MIME advisory routing">
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100">
+                  <Mail size={15} />
+                </div>
+                <span className="font-mono text-xs font-semibold text-slate-800">Production SMTP</span>
+              </div>
+              <Badge variant="medium">HIGH &bull; CRITICAL</Badge>
             </div>
-            <Badge variant="cyan">MEDIUM &bull; HIGH &bull; CRITICAL</Badge>
-          </div>
-          <p className="text-xs text-slate-400 font-mono mb-4">
-            Dispatches rich HTML advisory alerts to the designated SOC engineering mailbox.
-          </p>
-          <div className="flex items-center justify-between pt-3 border-t border-[#1e293b]">
-            <span className="text-xs font-mono text-slate-300">Channel Status: Active</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTestNotification('email')}
-              isLoading={isTesting}
-              icon={<Send size={12} />}
-            >
-              Test Email
-            </Button>
+            <p className="text-xs text-slate-500 leading-relaxed font-sans">
+              Dispatches authenticated security notices and dynamic verification OTPs to operator inboxes.
+            </p>
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-xs font-mono text-emerald-700 flex items-center gap-1.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Active
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleTestNotification('email')}
+                isLoading={isTesting}
+                icon={<Send size={12} />}
+              >
+                Test Dispatch
+              </Button>
+            </div>
           </div>
         </Card>
 
         {/* Telegram Bot Channel */}
-        <Card className="border-t-4 border-t-indigo-500">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Send size={18} className="text-indigo-400" />
-              <h3 className="font-mono text-sm font-bold text-slate-100 uppercase">Telegram Bot</h3>
+        <Card title="Telegram Gateway" subtitle="Direct push webhook dispatch">
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">
+                  <Send size={15} />
+                </div>
+                <span className="font-mono text-xs font-semibold text-slate-800">Incident Channel</span>
+              </div>
+              <Badge variant="critical">CRITICAL ONLY</Badge>
             </div>
-            <Badge variant="high">HIGH &bull; CRITICAL</Badge>
-          </div>
-          <p className="text-xs text-slate-400 font-mono mb-4">
-            Direct high-priority push messages to the SOC Incident Response Telegram group.
-          </p>
-          <div className="flex items-center justify-between pt-3 border-t border-[#1e293b]">
-            <span className="text-xs font-mono text-slate-300">Channel Status: Active</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleTestNotification('telegram')}
-              isLoading={isTesting}
-              icon={<Send size={12} />}
-            >
-              Test Telegram
-            </Button>
+            <p className="text-xs text-slate-500 leading-relaxed font-sans">
+              Broadcasts immediate escalation events to the on-call SOC mobile response channel.
+            </p>
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-xs font-mono text-emerald-700 flex items-center gap-1.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Active
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleTestNotification('telegram')}
+                isLoading={isTesting}
+                icon={<Send size={12} />}
+              >
+                Test Dispatch
+              </Button>
+            </div>
           </div>
         </Card>
 
         {/* Mock/Simulated Channel */}
-        <Card className="border-t-4 border-t-amber-500">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Radio size={18} className="text-amber-400" />
-              <h3 className="font-mono text-sm font-bold text-slate-100 uppercase">Lab Mock Adapter</h3>
+        <Card title="Simulation Harness" subtitle="Local offline verification adapter">
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100">
+                  <Radio size={15} />
+                </div>
+                <span className="font-mono text-xs font-semibold text-slate-800">Lab Mock Driver</span>
+              </div>
+              <Badge variant="warning">DEV / LAB</Badge>
             </div>
-            <Badge variant="warning">DEV / LAB</Badge>
-          </div>
-          <p className="text-xs text-slate-400 font-mono mb-4">
-            Safe offline simulation adapter for local college lab testing without live SMTP/Telegram tokens.
-          </p>
-          <div className="flex items-center justify-between pt-3 border-t border-[#1e293b]">
-            <span className="text-xs font-mono text-emerald-400">Zero-Config Ready</span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => handleTestNotification('mock')}
-              isLoading={isTesting}
-              icon={<Send size={12} />}
-            >
-              Test Mock
-            </Button>
+            <p className="text-xs text-slate-500 leading-relaxed font-sans">
+              Safe offline driver recording notifications into database memory without live internet egress.
+            </p>
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-xs font-mono text-slate-500 font-medium">Zero-Egress</span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleTestNotification('mock')}
+                isLoading={isTesting}
+                icon={<Send size={12} />}
+              >
+                Test Mock
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
@@ -180,37 +198,37 @@ export const Notifications: React.FC = () => {
       {/* Dispatched Notification History */}
       <Card title="Dispatched Notification Audit History" subtitle="Chronological log of alerts transmitted to external endpoints">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead className="text-slate-400 border-b border-[#1e293b]">
+          <table className="soc-table w-full text-left text-xs font-mono">
+            <thead>
               <tr>
-                <th className="pb-3">Channel</th>
-                <th className="pb-3">Recipient</th>
-                <th className="pb-3">Subject / Alert</th>
-                <th className="pb-3">Transmission Status</th>
-                <th className="pb-3 text-right">Timestamp</th>
+                <th>Channel</th>
+                <th>Recipient</th>
+                <th>Subject / Alert</th>
+                <th>Transmission Status</th>
+                <th className="text-right">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {logs.length > 0 ? (
                 logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-900/60 transition">
-                    <td className="py-3 font-semibold text-indigo-400">{log.channel}</td>
-                    <td className="py-3 text-slate-300">{log.recipient}</td>
-                    <td className="py-3 font-medium text-slate-200 max-w-sm truncate">{log.subject}</td>
+                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 font-semibold text-blue-600">{log.channel}</td>
+                    <td className="py-3 text-slate-700">{log.recipient}</td>
+                    <td className="py-3 font-sans text-xs text-slate-800 max-w-sm truncate">{log.subject}</td>
                     <td className="py-3">
                       <Badge variant={log.status === 'SENT' ? 'online' : log.status === 'SIMULATED' ? 'warning' : 'critical'}>
                         {log.status}
                       </Badge>
                     </td>
-                    <td className="py-3 text-right text-slate-400">
-                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <td className="py-3 text-right text-slate-500">
+                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} UTC
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="py-4 text-center text-slate-500">
-                    No external notifications dispatched yet.
+                  <td colSpan={5} className="py-8 text-center text-slate-400 font-sans text-xs">
+                    No external notifications recorded in this session.
                   </td>
                 </tr>
               )}

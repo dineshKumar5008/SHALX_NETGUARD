@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Shield, User, Key, Eye, EyeOff, AlertCircle, Mail, 
-  RefreshCw, ArrowLeft, CheckCircle2 
+  Shield, Mail, Lock, Eye, EyeOff, AlertCircle, 
+  RefreshCw, ArrowLeft, CheckCircle2, Network, ShieldCheck, Server
 } from 'lucide-react';
-import { Button } from '../components/common/Button';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login, verifyMfa, resendMfa } = useAuth();
 
-  // Login form state - strictly empty initially
+  // Login form state
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [keepSignedIn, setKeepSignedIn] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -57,7 +57,7 @@ export const Login: React.FC = () => {
   const handleInitialLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) {
-      setErrorMessage('Please enter your username/email and password.');
+      setErrorMessage('Please enter your email or username and password.');
       return;
     }
 
@@ -79,7 +79,7 @@ export const Login: React.FC = () => {
         navigate('/');
       }
     } else {
-      setErrorMessage(res.error || 'Invalid username or password. Please verify your credentials.');
+      setErrorMessage(res.error || 'Invalid credentials. Please verify your email and password.');
     }
   };
 
@@ -118,7 +118,7 @@ export const Login: React.FC = () => {
       setTimeLeft(res.expiresIn || 300);
       setResendCooldown(30);
       setOtpCode('');
-      setSuccessMessage('A new verification code has been dispatched to your registered email.');
+      setSuccessMessage('A new verification code has been dispatched to your email.');
     } else {
       setErrorMessage(res.error || 'Failed to resend verification code. Please try again.');
     }
@@ -131,219 +131,319 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#07090e] bg-gradient-to-b from-[#0a0d14] via-[#07090e] to-[#040609] flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans select-none">
-      {/* Subtle Background Cyber Grid Glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(2,132,199,0.15),rgba(255,255,255,0))] pointer-events-none" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b0a_1px,transparent_1px),linear-gradient(to_bottom,#1e293b0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
+    <div className="min-h-screen bg-gradient-to-br from-[#d9f0ec] via-[#e5f5f2] to-[#ddf2ee] flex items-center justify-center p-4 sm:p-8 relative overflow-hidden font-sans select-none">
+      
+      {/* Soft Ambient Glows */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-300/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-200/25 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Main Authentication Card */}
-      <div className="w-full max-w-[440px] bg-[#0c101b]/95 backdrop-blur-xl border border-slate-800/90 hover:border-cyan-500/30 rounded-2xl p-7 sm:p-9 shadow-[0_0_60px_-15px_rgba(2,132,199,0.18)] transition-all duration-300 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Main Dual-Column Container */}
+      <div className="w-full max-w-5xl bg-white rounded-[26px] shadow-[0_24px_70px_-15px_rgba(10,40,36,0.15)] border border-white/90 p-3 sm:p-4.5 flex flex-col lg:flex-row relative z-10 transition-all">
         
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3.5 bg-gradient-to-br from-cyan-950/80 to-slate-900 border border-cyan-500/30 rounded-2xl mb-3.5 shadow-[0_0_25px_rgba(2,132,199,0.25)] group transition-transform duration-300 hover:scale-105">
-            <Shield className="w-8 h-8 text-cyan-400 drop-shadow-[0_0_8px_rgba(0,240,255,0.6)]" />
-          </div>
-          <h1 className="text-2xl font-black font-mono tracking-wider text-slate-100 uppercase">
-            SHALX <span className="text-cyan-400">NETGUARD</span>
-          </h1>
-          <p className="text-xs text-slate-400 font-mono tracking-wide mt-1">
-            Secure Network Security Operations Center
-          </p>
-        </div>
+        {/* =================================================================== */}
+        {/* LEFT COLUMN: HERO PANEL                                             */}
+        {/* =================================================================== */}
+        <div className="w-full lg:w-[47%] bg-gradient-to-b from-[#0c2623] via-[#0d2a27] to-[#071918] rounded-[20px] p-8 sm:p-10 flex flex-col justify-between text-white relative overflow-hidden shadow-inner min-h-[520px] lg:min-h-[580px]">
+          
+          {/* Subtle Ambient Radial Lighting */}
+          <div className="absolute -top-20 -left-20 w-72 h-72 bg-[#14b8a6]/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-[#0d9488]/15 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="mb-5 p-3.5 bg-rose-950/70 border border-rose-800/80 rounded-xl flex items-start gap-3 text-xs text-rose-200 animate-in fade-in duration-200">
-            <AlertCircle size={17} className="shrink-0 text-rose-400 mt-0.5" />
-            <div className="leading-relaxed">{errorMessage}</div>
+          {/* Top Brand Pill */}
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#00a693]/20 border border-[#00c9b2]/30 flex items-center justify-center shadow-xs">
+              <Shield className="w-4 h-4 text-[#2dd4bf]" />
+            </div>
+            <span className="font-bold font-mono tracking-wider text-sm text-white uppercase">
+              SHALX <span className="text-[#2dd4bf]">NETGUARD</span>
+            </span>
           </div>
-        )}
 
-        {/* Success Alert */}
-        {successMessage && (
-          <div className="mb-5 p-3.5 bg-emerald-950/70 border border-emerald-800/80 rounded-xl flex items-start gap-3 text-xs text-emerald-200 animate-in fade-in duration-200">
-            <CheckCircle2 size={17} className="shrink-0 text-emerald-400 mt-0.5" />
-            <div className="leading-relaxed">{successMessage}</div>
-          </div>
-        )}
+          {/* Middle Content Section */}
+          <div className="relative z-10 my-auto py-8">
+            {/* Headline */}
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-[1.2] text-white mb-8">
+              Network Visibility.<br />
+              <span className="text-[#2dd4bf]">Security Intelligence.</span><br />
+              Total Control.
+            </h2>
 
-        {!isMfaStep ? (
-          /* STEP 1: INITIAL LOGIN CREDENTIALS FORM */
-          <form onSubmit={handleInitialLogin} className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-mono font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Username or Registered Email
-              </label>
-              <div className="relative group">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 group-focus-within:text-cyan-400 transition-colors">
-                  <User size={16} />
-                </span>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  autoComplete="username"
-                  required
-                  className="w-full bg-[#070a12] border border-slate-800 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 font-mono placeholder-slate-600 transition-all outline-none"
-                  placeholder="Enter username or email"
-                />
+            {/* Feature Bullets */}
+            <div className="space-y-5">
+              {/* Feature 1 */}
+              <div className="flex items-start gap-3.5">
+                <div className="w-7 h-7 rounded-lg bg-[#00a693]/15 border border-[#00c9b2]/25 flex items-center justify-center shrink-0 mt-0.5">
+                  <Network className="w-3.5 h-3.5 text-[#2dd4bf]" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-white tracking-wide">
+                    Real-Time Network Visibility
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-normal">
+                    Discover devices and understand your network environment.
+                  </p>
+                </div>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="flex items-start gap-3.5">
+                <div className="w-7 h-7 rounded-lg bg-[#00a693]/15 border border-[#00c9b2]/25 flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#2dd4bf]" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-white tracking-wide">
+                    Centralized Security Monitoring
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-normal">
+                    Monitor alerts, events, and operational health in one place.
+                  </p>
+                </div>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="flex items-start gap-3.5">
+                <div className="w-7 h-7 rounded-lg bg-[#00a693]/15 border border-[#00c9b2]/25 flex items-center justify-center shrink-0 mt-0.5">
+                  <Server className="w-3.5 h-3.5 text-[#2dd4bf]" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-white tracking-wide">
+                    Intelligent Device Discovery
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed font-normal">
+                    View discovered assets and available device identification details.
+                  </p>
+                </div>
               </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-[11px] font-mono font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Password
-              </label>
-              <div className="relative group">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 group-focus-within:text-cyan-400 transition-colors">
-                  <Key size={16} />
-                </span>
+          {/* Bottom Footer Text */}
+          <div className="relative z-10 pt-4 text-[11px] text-slate-400 font-normal">
+            &copy; 2026 SHALX NETGUARD &middot; Enterprise Network Security Operations Platform
+          </div>
+        </div>
+
+        {/* =================================================================== */}
+        {/* RIGHT COLUMN: LOGIN / MFA FORM                                     */}
+        {/* =================================================================== */}
+        <div className="w-full lg:w-[53%] px-6 py-8 sm:px-12 sm:py-10 flex flex-col justify-center bg-white">
+          
+          {/* Header */}
+          <div className="mb-7">
+            <h1 className="text-2xl sm:text-[28px] font-bold text-slate-900 tracking-tight">
+              {isMfaStep ? 'Two-Factor Authentication' : 'Welcome Back'}
+            </h1>
+            <p className="text-xs text-slate-500 mt-1.5 font-normal">
+              {isMfaStep 
+                ? 'Enter the 6-digit verification code sent to your registered email' 
+                : 'Sign-in to your account to continue'}
+            </p>
+          </div>
+
+          {/* Error Alert */}
+          {errorMessage && (
+            <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 font-sans shadow-xs">
+              <AlertCircle size={16} className="shrink-0 text-rose-600 mt-0.5" />
+              <div className="leading-relaxed">{errorMessage}</div>
+            </div>
+          )}
+
+          {/* Success Alert */}
+          {successMessage && (
+            <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-800 font-sans shadow-xs">
+              <CheckCircle2 size={16} className="shrink-0 text-emerald-600 mt-0.5" />
+              <div className="leading-relaxed">{successMessage}</div>
+            </div>
+          )}
+
+          {!isMfaStep ? (
+            /* STEP 1: CREDENTIALS SIGN-IN FORM */
+            <form onSubmit={handleInitialLogin} className="space-y-4.5">
+              
+              {/* Email Address */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-800 mb-1.5">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
+                    <Mail size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    autoComplete="username"
+                    required
+                    placeholder="name@company.com"
+                    className="w-full bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-[#007369] focus:ring-2 focus:ring-[#007369]/15 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-800 block">
+                    Password
+                  </label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-medium text-[#007a70] hover:text-[#005c54] transition hover:underline"
+                  >
+                    Forgot Password?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
+                    <Lock size={16} />
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-[#007369] focus:ring-2 focus:ring-[#007369]/15 rounded-xl pl-10 pr-10 py-2.5 text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Keep me signed in */}
+              <div className="flex items-center gap-2 pt-0.5">
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                  className="w-full bg-[#070a12] border border-slate-800 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/30 rounded-xl pl-10 pr-11 py-2.5 text-sm text-slate-100 font-mono placeholder-slate-600 transition-all outline-none"
-                  placeholder="Enter password"
+                  id="keep-signed-in"
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={(e) => setKeepSignedIn(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#00665e] focus:ring-[#00665e]/20 cursor-pointer"
                 />
+                <label htmlFor="keep-signed-in" className="text-xs text-slate-600 cursor-pointer select-none">
+                  Keep me signed in
+                </label>
+              </div>
+
+              {/* Sign In Button */}
+              <div className="pt-2">
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
-                  tabIndex={-1}
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-[#00665e] hover:bg-[#00544d] active:scale-[0.99] text-white text-xs font-semibold py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {isLoading ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Signing In...</span>
+                    </>
+                  ) : (
+                    <span>Sign In</span>
+                  )}
                 </button>
               </div>
 
-              {/* Forgot Password Link */}
-              <div className="flex justify-end mt-2">
+              {/* Bottom Register Request Link */}
+              <div className="text-center pt-5 text-xs text-slate-500">
+                <span>Don't have an account? </span>
                 <Link
-                  to="/forgot-password"
-                  className="text-xs font-mono text-cyan-400/90 hover:text-cyan-300 hover:underline transition-colors"
+                  to="/register"
+                  className="font-semibold text-[#007a70] hover:text-[#005c54] hover:underline transition"
                 >
-                  Forgot Password?
+                  Request an Account
                 </Link>
               </div>
-            </div>
-
-            <Button
-              type="submit"
-              isLoading={isLoading}
-              className="w-full mt-2 font-mono tracking-wider font-bold shadow-[0_0_20px_rgba(2,132,199,0.25)] hover:shadow-[0_0_25px_rgba(2,132,199,0.4)] transition-all"
-              size="lg"
-            >
-              SIGN IN
-            </Button>
-
-            {/* Divider */}
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800/90" />
+            </form>
+          ) : (
+            /* STEP 2: MFA 6-DIGIT OTP VERIFICATION */
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <div className="text-center mb-5">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-teal-50 border border-teal-200/80 rounded-full text-xs font-mono text-teal-800 mb-2">
+                  <Mail size={13} className="text-[#007369]" />
+                  <span>{maskedEmail}</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                  Enter the dynamic verification code dispatched to your inbox.
+                </p>
               </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-[#0c101b] px-3 text-[11px] font-mono text-slate-500 uppercase tracking-widest">
-                  OR
-                </span>
-              </div>
-            </div>
 
-            {/* Register Option */}
-            <div className="text-center pt-1">
-              <span className="text-xs text-slate-400">Don't have an account? </span>
-              <Link
-                to="/register"
-                className="text-xs font-mono text-cyan-400 hover:text-cyan-300 font-semibold hover:underline transition-colors ml-1"
-              >
-                Register
-              </Link>
-            </div>
-          </form>
-        ) : (
-          /* STEP 2: MFA OTP VERIFICATION FORM */
-          <form onSubmit={handleVerifyOtp} className="space-y-4 animate-in fade-in duration-300">
-            <div className="text-center mb-5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-cyan-950/60 border border-cyan-700/60 rounded-full text-xs font-mono text-cyan-300 mb-2.5 shadow-sm">
-                <Mail size={13} />
-                <span>{maskedEmail}</span>
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    6-Digit Verification Code
+                  </label>
+                  <span className={`text-xs font-mono ${timeLeft < 60 ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>
+                    ⏱️ {formatTimer(timeLeft)}
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    autoFocus
+                    required
+                    className="w-full bg-slate-50/80 border border-slate-300 focus:bg-white focus:border-[#007369] focus:ring-2 focus:ring-[#007369]/15 rounded-xl px-4 py-3 text-center text-2xl font-mono font-bold tracking-[0.4em] text-slate-900 outline-none transition shadow-2xs"
+                    placeholder="••••••"
+                  />
+                </div>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Enter the 6-digit authentication code dispatched to your verified registered email address.
-              </p>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-[11px] font-mono font-semibold text-slate-300 uppercase tracking-wider">
-                  6-Digit Verification Code
-                </label>
-                <span className={`text-xs font-mono font-semibold ${timeLeft < 60 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`}>
-                  ⏱️ {formatTimer(timeLeft)}
-                </span>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                  autoFocus
-                  required
-                  className="w-full bg-[#070a12] border border-cyan-500/50 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/40 rounded-xl px-4 py-3 text-center text-2xl font-mono font-bold tracking-[0.45em] text-cyan-300 placeholder-slate-700 transition-all outline-none shadow-inner"
-                  placeholder="••••••"
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              isLoading={isLoading}
-              disabled={timeLeft === 0}
-              className="w-full mt-2 font-mono tracking-wider font-bold shadow-[0_0_20px_rgba(2,132,199,0.3)] hover:shadow-[0_0_25px_rgba(2,132,199,0.45)] transition-all"
-              size="lg"
-            >
-              AUTHENTICATE TO SOC
-            </Button>
-
-            {/* Resend & Back Controls */}
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMfaStep(false);
-                  setErrorMessage(null);
-                  setSuccessMessage(null);
-                  setOtpCode('');
-                }}
-                className="flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-slate-200 transition-colors"
-              >
-                <ArrowLeft size={14} />
-                <span>Back to Login</span>
-              </button>
 
               <button
-                type="button"
-                onClick={handleResendCode}
-                disabled={resendCooldown > 0 || isResending}
-                className="flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:text-cyan-300 disabled:text-slate-600 transition-colors"
+                type="submit"
+                disabled={isLoading || timeLeft === 0}
+                className="w-full bg-[#00665e] hover:bg-[#00544d] active:scale-[0.99] text-white text-xs font-semibold py-2.5 px-4 rounded-xl shadow-xs transition duration-150 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <RefreshCw size={13} className={isResending ? 'animate-spin' : ''} />
-                <span>
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
-                </span>
+                {isLoading ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Verifying Code...</span>
+                  </>
+                ) : (
+                  <span>Verify &amp; Enter Console</span>
+                )}
               </button>
-            </div>
-          </form>
-        )}
-      </div>
 
-      {/* Footer Security Watermark */}
-      <div className="absolute bottom-4 text-center w-full text-[11px] font-mono text-slate-600 pointer-events-none">
-        SHALX NETGUARD SOC PLATFORM &bull; ENTERPRISE THREAT MONITORING
+              {/* Resend & Back Controls */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMfaStep(false);
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                    setOtpCode('');
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back to Login</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0 || isResending}
+                  className="flex items-center gap-1.5 text-xs text-[#007a70] hover:text-[#005c54] disabled:text-slate-400 font-medium transition"
+                >
+                  <RefreshCw size={12} className={isResending ? 'animate-spin' : ''} />
+                  <span>
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
 };
-

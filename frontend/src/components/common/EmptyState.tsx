@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 interface EmptyStateProps {
   icon?: React.ReactNode;
@@ -15,13 +15,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   action,
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-2xl text-slate-400 mb-3">
-        {icon || <ShieldAlert size={28} className="text-cyan-400" />}
+    <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
+      <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center mb-3.5 shadow-sm">
+        {icon || <ShieldCheck size={24} className="text-slate-500" />}
       </div>
-      <h4 className="text-sm font-medium font-mono text-slate-200">{title}</h4>
-      <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">{description}</p>
-      {action && <div>{action}</div>}
+      <h4 className="text-xs font-semibold uppercase tracking-wider font-mono text-slate-800">{title}</h4>
+      <p className="text-xs text-slate-500 max-w-md mt-1.5 leading-relaxed">{description}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 };

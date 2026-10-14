@@ -6,10 +6,10 @@ import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { 
-  Radio, RefreshCw, ArrowDownLeft, ArrowUpRight, Activity, Network, Layers, BarChart3 
+  Radio, RefreshCw 
 } from 'lucide-react';
 import { 
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Legend, CartesianGrid 
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid 
 } from 'recharts';
 
 export const Traffic: React.FC = () => {
@@ -71,26 +71,28 @@ export const Traffic: React.FC = () => {
   }
 
   const protoData = [
-    { name: 'TCP', count: summary?.protocols?.TCP || 0, fill: '#00f0ff' },
-    { name: 'UDP', count: summary?.protocols?.UDP || 0, fill: '#38bdf8' },
+    { name: 'TCP', count: summary?.protocols?.TCP || 0, fill: '#2563eb' },
+    { name: 'UDP', count: summary?.protocols?.UDP || 0, fill: '#3b82f6' },
     { name: 'ICMP', count: summary?.protocols?.ICMP || 0, fill: '#10b981' },
-    { name: 'Other', count: summary?.protocols?.OTHER || 0, fill: '#64748b' },
+    { name: 'Other', count: summary?.protocols?.OTHER || 0, fill: '#94a3b8' },
   ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2.5">
-            <Radio className="w-5 h-5 text-cyan-400" />
-            <span>REAL-TIME TRAFFIC FLOW & BANDWIDTH ANALYZER</span>
+          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-0.5">
+            <span>Network &amp; Assets</span>
+            <span>/</span>
+            <span className="text-slate-700 font-semibold">Traffic Telemetry</span>
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Radio className="w-5 h-5 text-blue-600" />
+            <span>Network Traffic Analysis &amp; Bandwidth Ingestion</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Subnet Flow Metering, Layer 4 Distribution, and Top Talker Matrix
-          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={fetchTrafficData} icon={<RefreshCw size={13} />}>
             Refresh Pulse
           </Button>
@@ -98,34 +100,36 @@ export const Traffic: React.FC = () => {
       </div>
 
       {/* Real-time Bandwidth Chart */}
-      <Card title="Bandwidth Ingress / Egress Stream (Kbps)" subtitle="Real-time rolling telemetry">
+      <Card title="Bandwidth Ingress / Egress Stream" subtitle="Real-time aggregate throughput (Kbps)">
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={trafficHistory}>
               <defs>
                 <linearGradient id="trafficIn" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00f0ff" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#00f0ff" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="trafficOut" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#e11d48" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#e11d48" stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="time" stroke="#475569" fontSize={10} />
-              <YAxis stroke="#475569" fontSize={10} unit=" Kb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+              <YAxis stroke="#94a3b8" fontSize={10} unit=" Kb" tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#0a0d14',
-                  borderColor: '#1e293b',
-                  borderRadius: '8px',
+                  backgroundColor: '#ffffff',
+                  borderColor: '#e2e8f0',
+                  borderRadius: '6px',
                   fontSize: '11px',
                   fontFamily: 'monospace',
+                  color: '#0f172a',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
                 }}
               />
-              <Area type="monotone" dataKey="in_kb" name="Ingress Bandwidth (Kbps)" stroke="#00f0ff" fill="url(#trafficIn)" strokeWidth={2} />
-              <Area type="monotone" dataKey="out_kb" name="Egress Bandwidth (Kbps)" stroke="#f43f5e" fill="url(#trafficOut)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="in_kb" name="Ingress Bandwidth (Kbps)" stroke="#2563eb" fill="url(#trafficIn)" strokeWidth={2} />
+              <Area type="monotone" dataKey="out_kb" name="Egress Bandwidth (Kbps)" stroke="#e11d48" fill="url(#trafficOut)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -133,24 +137,26 @@ export const Traffic: React.FC = () => {
 
       {/* Packet Rates & Protocol Matrix */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Packet Rate Activity (Packets / Second)" subtitle="Rolling packet counters">
+        <Card title="Packet Rate Activity" subtitle="Rolling ingress / egress packet volume">
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trafficHistory}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="time" stroke="#475569" fontSize={10} />
-                <YAxis stroke="#475569" fontSize={10} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0a0d14',
-                    borderColor: '#1e293b',
-                    borderRadius: '8px',
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e2e8f0',
+                    borderRadius: '6px',
                     fontSize: '11px',
                     fontFamily: 'monospace',
+                    color: '#0f172a',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
                   }}
                 />
-                <Area type="monotone" dataKey="pkts_in" name="Packets In" stroke="#10b981" fill="#10b981" fillOpacity={0.2} strokeWidth={1.5} />
-                <Area type="monotone" dataKey="pkts_out" name="Packets Out" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.2} strokeWidth={1.5} />
+                <Area type="monotone" dataKey="pkts_in" name="Packets In" stroke="#059669" fill="#059669" fillOpacity={0.1} strokeWidth={2} />
+                <Area type="monotone" dataKey="pkts_out" name="Packets Out" stroke="#2563eb" fill="#2563eb" fillOpacity={0.1} strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -160,19 +166,21 @@ export const Traffic: React.FC = () => {
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={protoData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="name" stroke="#475569" fontSize={10} />
-                <YAxis stroke="#475569" fontSize={10} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0a0d14',
-                    borderColor: '#1e293b',
-                    borderRadius: '8px',
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e2e8f0',
+                    borderRadius: '6px',
                     fontSize: '11px',
                     fontFamily: 'monospace',
+                    color: '#0f172a',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
                   }}
                 />
-                <Bar dataKey="count" fill="#00f0ff" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#2563eb" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -181,58 +189,62 @@ export const Traffic: React.FC = () => {
 
       {/* Top Talkers Tables */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card title="Top Ingress Talker IPs">
-          <table className="w-full text-left text-xs font-mono">
-            <thead className="text-slate-400 border-b border-[#1e293b]">
-              <tr>
-                <th className="pb-2">Source IP</th>
-                <th className="pb-2 text-right">Volume</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {summary?.top_sources && Object.keys(summary.top_sources).length > 0 ? (
-                Object.entries(summary.top_sources).map(([ip, bytes]: [string, any], idx) => (
-                  <tr key={idx}>
-                    <td className="py-2.5 font-bold text-cyan-400">{ip}</td>
-                    <td className="py-2.5 text-right font-medium text-slate-200">{Math.round(bytes / 1024)} KB</td>
-                  </tr>
-                ))
-              ) : (
+        <Card title="Top Ingress Talker IPs" subtitle="Highest inbound packet emitters">
+          <div className="overflow-x-auto">
+            <table className="soc-table">
+              <thead>
                 <tr>
-                  <td colSpan={2} className="py-4 text-center text-slate-500">
-                    No active flow deviations
-                  </td>
+                  <th>Source IP</th>
+                  <th className="text-right">Volume</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {summary?.top_sources && Object.keys(summary.top_sources).length > 0 ? (
+                  Object.entries(summary.top_sources).map(([ip, bytes]: [string, any], idx) => (
+                    <tr key={idx}>
+                      <td className="font-semibold text-blue-600">{ip}</td>
+                      <td className="text-right font-medium text-slate-800">{Math.round(bytes / 1024)} KB</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={2} className="py-4 text-center text-slate-500 font-sans">
+                      No active flow deviations
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
-        <Card title="Top Targeted Destination IPs">
-          <table className="w-full text-left text-xs font-mono">
-            <thead className="text-slate-400 border-b border-[#1e293b]">
-              <tr>
-                <th className="pb-2">Target IP</th>
-                <th className="pb-2 text-right">Volume</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {summary?.top_destinations && Object.keys(summary.top_destinations).length > 0 ? (
-                Object.entries(summary.top_destinations).map(([ip, bytes]: [string, any], idx) => (
-                  <tr key={idx}>
-                    <td className="py-2.5 font-bold text-rose-400">{ip}</td>
-                    <td className="py-2.5 text-right font-medium text-slate-200">{Math.round(bytes / 1024)} KB</td>
-                  </tr>
-                ))
-              ) : (
+        <Card title="Top Targeted Destination IPs" subtitle="Highest endpoint traffic sinks">
+          <div className="overflow-x-auto">
+            <table className="soc-table">
+              <thead>
                 <tr>
-                  <td colSpan={2} className="py-4 text-center text-slate-500">
-                    No active flow deviations
-                  </td>
+                  <th>Target IP</th>
+                  <th className="text-right">Volume</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {summary?.top_destinations && Object.keys(summary.top_destinations).length > 0 ? (
+                  Object.entries(summary.top_destinations).map(([ip, bytes]: [string, any], idx) => (
+                    <tr key={idx}>
+                      <td className="font-semibold text-rose-600">{ip}</td>
+                      <td className="text-right font-medium text-slate-800">{Math.round(bytes / 1024)} KB</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={2} className="py-4 text-center text-slate-500 font-sans">
+                      No active flow deviations
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
     </div>

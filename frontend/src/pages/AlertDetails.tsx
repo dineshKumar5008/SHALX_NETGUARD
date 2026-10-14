@@ -8,7 +8,7 @@ import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { 
-  ShieldAlert, ArrowLeft, Flame, Ban, CheckCircle, Code, Shield, User, Clock, Terminal 
+  ShieldAlert, ArrowLeft, Flame, Ban, CheckCircle, Terminal 
 } from 'lucide-react';
 
 export const AlertDetails: React.FC = () => {
@@ -85,30 +85,30 @@ export const AlertDetails: React.FC = () => {
     <div className="space-y-6">
       {/* Back Link & Header */}
       <div>
-        <Link to="/alerts" className="inline-flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:underline mb-3">
+        <Link to="/alerts" className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 hover:text-slate-800 mb-3 transition-colors">
           <ArrowLeft size={13} />
           <span>Back to Alerts Queue</span>
         </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
-              <ShieldAlert className="w-6 h-6 text-rose-400" />
+            <div className="p-2.5 bg-white border border-slate-200 rounded-lg shadow-sm">
+              <ShieldAlert className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold font-mono text-slate-100">{alert.title}</h1>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold font-mono text-slate-900">{alert.title}</h1>
                 <Badge variant={alert.severity.toLowerCase() as any}>{alert.severity}</Badge>
-                <Badge variant={alert.status === 'NEW' ? 'cyan' : 'default'}>{alert.status}</Badge>
+                <Badge variant={alert.status === 'NEW' ? 'primary' : 'default'}>{alert.status}</Badge>
               </div>
-              <div className="text-xs font-mono text-slate-400 mt-0.5">
-                Alert ID: <span className="text-cyan-400">{alert.alert_id}</span> | Source Engine: {alert.source}
+              <div className="text-xs font-mono text-slate-500 mt-0.5">
+                Alert ID: <span className="text-blue-600 font-semibold">{alert.alert_id}</span> | Source Engine: {alert.source}
               </div>
             </div>
           </div>
 
           {/* Action Buttons */}
           {isAnalyst && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Button
                 variant="primary"
                 size="sm"
@@ -131,8 +131,8 @@ export const AlertDetails: React.FC = () => {
       </div>
 
       {actionSuccess && (
-        <div className="p-3 bg-emerald-950/70 border border-emerald-800 text-xs font-mono text-emerald-300 rounded-lg flex items-center gap-2">
-          <CheckCircle size={15} />
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-xs font-mono text-emerald-800 rounded-lg flex items-center gap-2">
+          <CheckCircle size={14} className="text-emerald-600" />
           <span>{actionSuccess}</span>
         </div>
       )}
@@ -140,75 +140,75 @@ export const AlertDetails: React.FC = () => {
       {/* Forensic Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card title="Network Threat Context">
-          <div className="space-y-3 text-xs font-mono">
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">Threat Category:</span>
-              <span className="text-slate-200 capitalize font-semibold">{alert.category.replace('_', ' ')}</span>
+          <div className="space-y-2.5 text-xs font-mono">
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">Threat Category:</span>
+              <span className="text-slate-900 capitalize font-medium">{alert.category.replace('_', ' ')}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">Attacker Source IP:</span>
-              <span className="text-rose-400 font-bold">{alert.source_ip || 'N/A'}</span>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">Attacker Source IP:</span>
+              <span className="text-rose-600 font-semibold">{alert.source_ip || 'N/A'}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">Target Destination IP:</span>
-              <span className="text-cyan-400 font-bold">{alert.destination_ip || 'N/A'}</span>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">Target Destination IP:</span>
+              <span className="text-blue-600 font-semibold">{alert.destination_ip || 'N/A'}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">Target Port & Protocol:</span>
-              <span className="text-slate-200">{alert.destination_port || 'N/A'} ({alert.protocol || 'TCP'})</span>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">Target Port &amp; Protocol:</span>
+              <span className="text-slate-800">{alert.destination_port || 'N/A'} ({alert.protocol || 'TCP'})</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">IDS Signature:</span>
-              <span className="text-amber-300 truncate max-w-[240px]">{alert.signature || 'N/A'}</span>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">IDS Signature:</span>
+              <span className="text-amber-800 font-medium truncate max-w-[240px]">{alert.signature || 'N/A'}</span>
             </div>
             <div className="flex justify-between py-1.5">
-              <span className="text-slate-400">Detection Timestamp:</span>
-              <span className="text-slate-200">{new Date(alert.created_at).toLocaleString()} UTC</span>
+              <span className="text-slate-500">Detection Timestamp:</span>
+              <span className="text-slate-800">{new Date(alert.created_at).toLocaleString()} UTC</span>
             </div>
           </div>
         </Card>
 
-        <Card title="Triage State & Resolution Trail">
-          <div className="space-y-3 text-xs font-mono">
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">Acknowledged By:</span>
-              <span className="text-slate-200">{alert.acknowledged_by || 'Unacknowledged'}</span>
+        <Card title="Triage State &amp; Resolution Trail">
+          <div className="space-y-2.5 text-xs font-mono">
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">Acknowledged By:</span>
+              <span className="text-slate-800">{alert.acknowledged_by || 'Unacknowledged'}</span>
             </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400">Resolved By:</span>
-              <span className="text-slate-200">{alert.resolved_by || 'Pending Investigation'}</span>
+            <div className="flex justify-between py-1.5 border-b border-slate-100">
+              <span className="text-slate-500">Resolved By:</span>
+              <span className="text-slate-800">{alert.resolved_by || 'Pending Investigation'}</span>
             </div>
-            <div className="py-1.5 border-b border-slate-800/60">
-              <span className="text-slate-400 block mb-1">Resolution Notes:</span>
-              <span className="text-slate-300 italic">{alert.resolution_notes || 'No analyst resolution notes entered.'}</span>
+            <div className="py-1.5 border-b border-slate-100">
+              <span className="text-slate-500 block mb-1">Resolution Notes:</span>
+              <span className="text-slate-700 italic">{alert.resolution_notes || 'No analyst resolution notes entered.'}</span>
             </div>
             
             {/* Quick triage status change buttons */}
             {isAnalyst && (
               <div className="pt-2">
-                <span className="text-slate-400 block mb-2 uppercase text-[10px]">Quick Triage Transition:</span>
+                <span className="text-slate-500 block mb-2 uppercase text-[10px] font-semibold">Quick Triage Transition:</span>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleQuickTriage('acknowledge')}
-                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition"
+                    className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs border border-slate-200 transition active:scale-[0.99]"
                   >
                     Acknowledge
                   </button>
                   <button
                     onClick={() => handleQuickTriage('investigate')}
-                    className="px-2.5 py-1 rounded bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 text-xs transition"
+                    className="px-2.5 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs transition active:scale-[0.99]"
                   >
                     Investigate
                   </button>
                   <button
                     onClick={() => handleQuickTriage('resolve')}
-                    className="px-2.5 py-1 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 text-xs transition"
+                    className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs transition active:scale-[0.99]"
                   >
                     Resolve
                   </button>
                   <button
                     onClick={() => handleQuickTriage('false_positive')}
-                    className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-700 text-xs transition"
+                    className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs border border-slate-200 transition active:scale-[0.99]"
                   >
                     False Positive
                   </button>
@@ -223,12 +223,12 @@ export const AlertDetails: React.FC = () => {
       <Card
         title={
           <div className="flex items-center gap-2">
-            <Terminal size={16} className="text-cyan-400" />
+            <Terminal size={15} className="text-blue-600" />
             <span>Raw Normalized IDS Payload Inspector</span>
           </div>
         }
       >
-        <pre className="bg-[#090d16] p-4 rounded-lg border border-[#1e293b] text-xs font-mono text-cyan-300 overflow-x-auto max-h-96">
+        <pre className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 text-xs font-mono text-slate-800 overflow-x-auto max-h-96">
           {JSON.stringify(parsedRaw, null, 2)}
         </pre>
       </Card>

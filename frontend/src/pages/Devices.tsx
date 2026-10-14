@@ -8,8 +8,8 @@ import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { EmptyState } from '../components/common/EmptyState';
 import { 
-  Server, Search, Filter, RefreshCw, Eye, ShieldCheck, Network,
-  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle, HardDrive 
+  Server, Search, RefreshCw, Eye, ShieldCheck, Network,
+  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle
 } from 'lucide-react';
 
 export const Devices: React.FC = () => {
@@ -61,43 +61,45 @@ export const Devices: React.FC = () => {
   const getDeviceIcon = (type: string) => {
     switch ((type || '').toLowerCase()) {
       case 'laptop':
-        return <Laptop size={15} className="text-cyan-400" />;
+        return <Laptop size={14} className="text-blue-600" />;
       case 'mobile':
-        return <Smartphone size={15} className="text-emerald-400" />;
+        return <Smartphone size={14} className="text-emerald-600" />;
       case 'desktop':
       case 'workstation':
-        return <Monitor size={15} className="text-sky-400" />;
+        return <Monitor size={14} className="text-slate-600" />;
       case 'server':
-        return <Server size={15} className="text-indigo-400" />;
+        return <Server size={14} className="text-indigo-600" />;
       case 'router':
-        return <Router size={15} className="text-violet-400" />;
+        return <Router size={14} className="text-violet-600" />;
       case 'switch':
-        return <Network size={15} className="text-blue-400" />;
+        return <Network size={14} className="text-blue-600" />;
       case 'firewall':
-        return <ShieldCheck size={15} className="text-rose-400" />;
+        return <ShieldCheck size={14} className="text-rose-600" />;
       case 'printer':
-        return <Printer size={15} className="text-amber-400" />;
+        return <Printer size={14} className="text-amber-600" />;
       case 'iot':
-        return <Tv size={15} className="text-fuchsia-400" />;
+        return <Tv size={14} className="text-slate-500" />;
       default:
-        return <HelpCircle size={15} className="text-slate-400" />;
+        return <HelpCircle size={14} className="text-slate-400" />;
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2.5">
-            <Server className="w-5 h-5 text-cyan-400" />
-            <span>DISCOVERED NETWORK ASSETS &amp; HOST INVENTORY</span>
+          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-0.5">
+            <span>Asset Management</span>
+            <span>/</span>
+            <span className="text-slate-700 font-semibold">Device Inventory</span>
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Server className="w-5 h-5 text-blue-600" />
+            <span>Discovered Network Assets &amp; Host Inventory</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Real-time ARP/ICMP Monitored Infrastructure with Dynamic Device Type Classification
-          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button
             variant="primary"
             size="sm"
@@ -114,41 +116,41 @@ export const Devices: React.FC = () => {
       </div>
 
       {/* Filter / Search Bar */}
-      <div className="bg-[#0f1422] p-4 rounded-xl border border-[#1e293b] flex flex-wrap gap-4 items-center justify-between">
+      <div className="bg-white p-3.5 rounded-lg border border-slate-200/90 shadow-sm flex flex-wrap gap-3 items-center justify-between">
         <form onSubmit={handleSearchSubmit} className="flex-1 min-w-[260px] relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by hostname, IP address, MAC, or vendor..."
-            className="w-full bg-[#0a0d14] border border-[#1e293b] focus:border-cyan-500 rounded-lg pl-9 pr-4 py-1.5 text-xs text-slate-100 font-mono outline-none"
+            className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 rounded pl-9 pr-3 py-1.5 text-xs text-slate-900 font-mono outline-none transition-colors"
           />
         </form>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-[#0a0d14] border border-[#1e293b] text-slate-200 text-xs font-mono rounded-lg px-3 py-1.5 outline-none"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-mono rounded px-2.5 py-1.5 outline-none focus:border-blue-500"
           >
             <option value="">All Device Types</option>
-            <option value="Laptop">💻 Laptop</option>
-            <option value="Desktop">🖥 Desktop</option>
-            <option value="Mobile">📱 Mobile</option>
-            <option value="Server">🖥️ Server</option>
-            <option value="Router">📡 Router / Gateway</option>
-            <option value="Switch">🔀 Switch</option>
-            <option value="Firewall">🛡️ Firewall</option>
-            <option value="Printer">🖨 Printer</option>
-            <option value="IoT">📺 IoT Device</option>
-            <option value="Unknown">❓ Unknown</option>
+            <option value="Laptop">Laptop</option>
+            <option value="Desktop">Desktop</option>
+            <option value="Mobile">Mobile</option>
+            <option value="Server">Server</option>
+            <option value="Router">Router / Gateway</option>
+            <option value="Switch">Switch</option>
+            <option value="Firewall">Firewall</option>
+            <option value="Printer">Printer</option>
+            <option value="IoT">IoT Device</option>
+            <option value="Unknown">Unknown</option>
           </select>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-[#0a0d14] border border-[#1e293b] text-slate-200 text-xs font-mono rounded-lg px-3 py-1.5 outline-none"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-mono rounded px-2.5 py-1.5 outline-none focus:border-blue-500"
           >
             <option value="">All Statuses</option>
             <option value="ONLINE">Online</option>
@@ -174,64 +176,64 @@ export const Devices: React.FC = () => {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="text-slate-400 border-b border-[#1e293b]">
+            <table className="soc-table">
+              <thead>
                 <tr>
-                  <th className="pb-3">Hostname / Asset</th>
-                  <th className="pb-3">IP Address</th>
-                  <th className="pb-3">MAC Address</th>
-                  <th className="pb-3">Device Type</th>
-                  <th className="pb-3">Vendor / Hardware</th>
-                  <th className="pb-3">Subnet / VLAN</th>
-                  <th className="pb-3">Operating System</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3">Last Seen</th>
-                  <th className="pb-3 text-right">Actions</th>
+                  <th>Hostname / Asset</th>
+                  <th>IP Address</th>
+                  <th>MAC Address</th>
+                  <th>Device Type</th>
+                  <th>Vendor / Hardware</th>
+                  <th>Subnet / VLAN</th>
+                  <th>Operating System</th>
+                  <th>Status</th>
+                  <th>Last Seen</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody>
                 {devices.map((device) => (
-                  <tr key={device.id} className="hover:bg-slate-900/60 transition">
-                    <td className="py-3 font-semibold text-slate-100 flex items-center gap-2">
+                  <tr key={device.id}>
+                    <td className="font-medium text-slate-900 flex items-center gap-2">
                       {getDeviceIcon(device.device_type)}
-                      <span className="truncate max-w-[150px]">{device.hostname || 'Unknown'}</span>
+                      <span className="truncate max-w-[150px] font-sans font-semibold">{device.hostname || 'Unknown'}</span>
                     </td>
-                    <td className="py-3 font-mono text-cyan-400">{device.ip_address}</td>
-                    <td className="py-3 text-slate-400">{device.mac_address || 'Unknown'}</td>
-                    <td className="py-3">
+                    <td className="font-mono text-blue-600 font-semibold">{device.ip_address}</td>
+                    <td className="text-slate-500">{device.mac_address || 'Unknown'}</td>
+                    <td>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-slate-200 capitalize">{device.device_type}</span>
+                        <span className="font-medium text-slate-800 capitalize font-sans">{device.device_type}</span>
                         {device.device_type_confidence && (
-                          <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
-                            device.device_type_confidence === 'High' ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60' :
-                            device.device_type_confidence === 'Medium' ? 'bg-cyan-950/80 text-cyan-400 border border-cyan-800/60' :
-                            'bg-slate-800 text-slate-400 border border-slate-700'
+                          <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-medium ${
+                            device.device_type_confidence === 'High' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            device.device_type_confidence === 'Medium' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                            'bg-slate-100 text-slate-600 border border-slate-200'
                           }`}>
                             {device.device_type_confidence}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 text-slate-300 truncate max-w-[140px]">{device.vendor || 'Unknown'}</td>
-                    <td className="py-3 text-slate-300">
+                    <td className="text-slate-600 truncate max-w-[140px]">{device.vendor || 'Unknown'}</td>
+                    <td className="text-slate-600">
                       <div>{device.subnet || '192.168.1.0/24'}</div>
-                      <div className="text-[10px] text-cyan-400">{device.vlan || 'VLAN 1'}</div>
+                      <div className="text-[10px] text-blue-600 font-semibold">{device.vlan || 'VLAN 1'}</div>
                     </td>
-                    <td className="py-3 text-slate-300 truncate max-w-[120px]">
+                    <td className="text-slate-600 truncate max-w-[120px]">
                       {device.os_type && device.os_type !== 'Unknown' ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
                     </td>
-                    <td className="py-3">
+                    <td>
                       <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
                     </td>
-                    <td className="py-3 text-slate-400 text-[11px]">
+                    <td className="text-slate-500 text-[11px]">
                       {new Date(device.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    <td className="py-3 text-right">
+                    <td className="text-right">
                       <Link
                         to={`/devices/${device.id}`}
-                        className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 hover:underline"
+                        className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition font-medium text-xs border border-slate-200 inline-flex items-center gap-1 active:scale-[0.99]"
                       >
-                        <Eye size={13} />
+                        <Eye size={12} />
                         <span>Inspect</span>
                       </Link>
                     </td>

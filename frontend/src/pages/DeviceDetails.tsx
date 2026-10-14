@@ -7,10 +7,10 @@ import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { 
-  Server, Shield, Activity, Cpu, HardDrive, ArrowLeft, Ban, ShieldAlert, CheckCircle2, Network,
-  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle, Radio, Tag, Layers, Globe, RadioTower
+  Server, Shield, Activity, Cpu, ArrowLeft, Ban, ShieldAlert, CheckCircle2, Network,
+  Laptop, Smartphone, Monitor, Printer, Router, Tv, HelpCircle
 } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export const DeviceDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -62,24 +62,24 @@ export const DeviceDetails: React.FC = () => {
     const t = (type || 'Unknown').toLowerCase();
     switch (t) {
       case 'laptop':
-        return { label: 'Laptop', emoji: '💻', icon: <Laptop size={16} className="text-cyan-400" /> };
+        return { label: 'Laptop', emoji: '💻', icon: <Laptop size={16} className="text-blue-600" /> };
       case 'mobile':
-        return { label: 'Mobile', emoji: '📱', icon: <Smartphone size={16} className="text-emerald-400" /> };
+        return { label: 'Mobile', emoji: '📱', icon: <Smartphone size={16} className="text-emerald-600" /> };
       case 'desktop':
       case 'workstation':
-        return { label: 'Desktop', emoji: '🖥', icon: <Monitor size={16} className="text-sky-400" /> };
+        return { label: 'Desktop', emoji: '🖥', icon: <Monitor size={16} className="text-slate-600" /> };
       case 'server':
-        return { label: 'Server', emoji: '🖥️', icon: <Server size={16} className="text-indigo-400" /> };
+        return { label: 'Server', emoji: '🖥️', icon: <Server size={16} className="text-indigo-600" /> };
       case 'router':
-        return { label: 'Router', emoji: '📡', icon: <Router size={16} className="text-violet-400" /> };
+        return { label: 'Router', emoji: '📡', icon: <Router size={16} className="text-violet-600" /> };
       case 'switch':
-        return { label: 'Switch', emoji: '🔀', icon: <Network size={16} className="text-blue-400" /> };
+        return { label: 'Switch', emoji: '🔀', icon: <Network size={16} className="text-blue-600" /> };
       case 'firewall':
-        return { label: 'Firewall', emoji: '🛡️', icon: <Shield size={16} className="text-rose-400" /> };
+        return { label: 'Firewall', emoji: '🛡️', icon: <Shield size={16} className="text-rose-600" /> };
       case 'printer':
-        return { label: 'Printer', emoji: '🖨', icon: <Printer size={16} className="text-amber-400" /> };
+        return { label: 'Printer', emoji: '🖨', icon: <Printer size={16} className="text-amber-600" /> };
       case 'iot':
-        return { label: 'IoT', emoji: '📺', icon: <Tv size={16} className="text-fuchsia-400" /> };
+        return { label: 'IoT', emoji: '📺', icon: <Tv size={16} className="text-slate-500" /> };
       default:
         return { label: 'Unknown', emoji: '❓', icon: <HelpCircle size={16} className="text-slate-400" /> };
     }
@@ -93,27 +93,27 @@ export const DeviceDetails: React.FC = () => {
     <div className="space-y-6">
       {/* Back Link & Header */}
       <div>
-        <Link to="/devices" className="inline-flex items-center gap-1.5 text-xs font-mono text-cyan-400 hover:underline mb-3">
+        <Link to="/devices" className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-500 hover:text-slate-800 mb-3 transition-colors">
           <ArrowLeft size={13} />
           <span>Back to Device Inventory</span>
         </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+            <div className="p-2.5 bg-white border border-slate-200 rounded-lg shadow-sm">
               {devTypeInfo.icon}
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold font-mono text-slate-100">{device.hostname || 'Unknown'}</h1>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold font-mono text-slate-900">{device.hostname || 'Unknown'}</h1>
                 <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
               </div>
-              <div className="text-xs font-mono text-slate-400 mt-0.5">
-                IP: <span className="text-cyan-400">{device.ip_address}</span> | MAC: {device.mac_address || 'Unknown'}
+              <div className="text-xs font-mono text-slate-500 mt-0.5">
+                IP: <span className="text-blue-600 font-semibold">{device.ip_address}</span> | MAC: {device.mac_address || 'Unknown'}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link to={`/blocked-ips?target=${device.ip_address}`}>
               <Button variant="danger" size="sm" icon={<Ban size={13} />}>
                 Quarantine / Block Host
@@ -124,48 +124,48 @@ export const DeviceDetails: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#1e293b] gap-6 text-xs font-mono">
+      <div className="flex border-b border-slate-200 gap-6 text-xs font-mono">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`pb-3 transition border-b-2 font-medium ${
+          className={`pb-2.5 transition border-b-2 font-medium ${
             activeTab === 'overview'
-              ? 'border-cyan-400 text-cyan-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-blue-600 text-blue-700 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
           System Overview &amp; Specifications
         </button>
         <button
           onClick={() => setActiveTab('activity')}
-          className={`pb-3 transition border-b-2 font-medium flex items-center gap-1.5 ${
+          className={`pb-2.5 transition border-b-2 font-medium flex items-center gap-1.5 ${
             activeTab === 'activity'
-              ? 'border-cyan-400 text-cyan-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-blue-600 text-blue-700 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Activity size={14} />
+          <Activity size={13} />
           <span>Network &amp; Web Activity</span>
         </button>
         <button
           onClick={() => setActiveTab('health')}
-          className={`pb-3 transition border-b-2 font-medium flex items-center gap-1.5 ${
+          className={`pb-2.5 transition border-b-2 font-medium flex items-center gap-1.5 ${
             activeTab === 'health'
-              ? 'border-cyan-400 text-cyan-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-blue-600 text-blue-700 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Cpu size={14} />
+          <Cpu size={13} />
           <span>Host Health Telemetry</span>
         </button>
         <button
           onClick={() => setActiveTab('alerts')}
-          className={`pb-3 transition border-b-2 font-medium flex items-center gap-1.5 ${
+          className={`pb-2.5 transition border-b-2 font-medium flex items-center gap-1.5 ${
             activeTab === 'alerts'
-              ? 'border-cyan-400 text-cyan-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-blue-600 text-blue-700 font-semibold'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <ShieldAlert size={14} />
+          <ShieldAlert size={13} />
           <span>Associated Alerts ({alerts.length})</span>
         </button>
       </div>
@@ -175,28 +175,28 @@ export const DeviceDetails: React.FC = () => {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Card 1: Evidence-Based Hardware & Platform Specifications */}
-            <Card title="DEVICE DETAILS &amp; SPECIFICATIONS">
-              <div className="space-y-3 text-xs font-mono">
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Device Name:</span>
-                  <span className="text-slate-200 font-bold">{device.hostname || device.ip_address}</span>
+            <Card title="Device Details &amp; Specifications">
+              <div className="space-y-2.5 text-xs font-mono">
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Device Name:</span>
+                  <span className="text-slate-900 font-medium">{device.hostname || device.ip_address}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">IP Address:</span>
-                  <span className="text-cyan-400 font-bold">{device.ip_address}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">IP Address:</span>
+                  <span className="text-blue-600 font-semibold">{device.ip_address}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">MAC Address:</span>
-                  <span className="text-slate-200">{device.mac_address || 'Unknown'}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">MAC Address:</span>
+                  <span className="text-slate-700">{device.mac_address || 'Unknown'}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Hostname:</span>
-                  <span className="text-slate-200">{device.hostname || 'Unknown'}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Hostname:</span>
+                  <span className="text-slate-700">{device.hostname || 'Unknown'}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Device Type:</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Device Type:</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-100 font-bold flex items-center gap-1.5">
+                    <span className="text-slate-800 font-medium flex items-center gap-1.5">
                       <span>{devTypeInfo.emoji}</span>
                       <span>{devTypeInfo.label}</span>
                     </span>
@@ -208,10 +208,10 @@ export const DeviceDetails: React.FC = () => {
                     </Badge>
                   </div>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Operating System:</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Operating System:</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-200">
+                    <span className="text-slate-700">
                       {device.os_type && device.os_type !== 'Unknown' ? `${device.os_type} ${device.os_version || ''}`.trim() : 'Unknown'}
                     </span>
                     {device.os_type && device.os_type !== 'Unknown' && (
@@ -224,84 +224,84 @@ export const DeviceDetails: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Architecture:</span>
-                  <span className="text-slate-200">{device.architecture || 'Unknown'}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Architecture:</span>
+                  <span className="text-slate-700">{device.architecture || 'Unknown'}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Hardware Vendor:</span>
-                  <span className="text-slate-200">{device.vendor || 'Unknown'}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Hardware Vendor:</span>
+                  <span className="text-slate-700">{device.vendor || 'Unknown'}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">Subnet Segment:</span>
-                  <span className="text-slate-200">{device.subnet || '192.168.1.0/24'}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">Subnet Segment:</span>
+                  <span className="text-slate-700">{device.subnet || '192.168.1.0/24'}</span>
                 </div>
-                <div className="flex justify-between items-center py-1.5 border-b border-slate-800/60">
-                  <span className="text-slate-400">VLAN Segment:</span>
-                  <span className="text-cyan-400 font-semibold">{device.vlan || 'VLAN 1'}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
+                  <span className="text-slate-500">VLAN Segment:</span>
+                  <span className="text-blue-600 font-semibold">{device.vlan || 'VLAN 1'}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5">
-                  <span className="text-slate-400">Status:</span>
+                  <span className="text-slate-500">Status:</span>
                   <Badge variant={device.status.toLowerCase() as any}>{device.status}</Badge>
                 </div>
               </div>
             </Card>
 
             {/* Card 2: Network Ports & Detected Services */}
-            <Card title="DETECTED SERVICES &amp; OPEN PORTS">
+            <Card title="Detected Services &amp; Open Ports">
               <div className="space-y-4 text-xs font-mono">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-slate-400 uppercase font-semibold">Open Ports:</span>
-                    <span className="text-cyan-400 font-mono text-[11px]">{openPortsList.length} Active</span>
+                    <span className="text-slate-500 uppercase font-semibold">Open Ports:</span>
+                    <span className="text-blue-600 font-mono text-[11px] font-semibold">{openPortsList.length} Active</span>
                   </div>
                   {openPortsList.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {openPortsList.map((p) => (
-                        <span key={p} className="px-2.5 py-1 bg-cyan-950/80 border border-cyan-800 text-cyan-300 rounded font-mono font-bold text-xs">
+                        <span key={p} className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded font-mono font-medium text-xs">
                           Port {p}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <div className="p-3 bg-slate-900/60 rounded border border-slate-800 text-slate-500 italic">
+                    <div className="p-3 bg-slate-50 rounded border border-slate-200 text-slate-500 italic">
                       None detected (Filtered or closed)
                     </div>
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80">
+                <div className="pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-slate-400 uppercase font-semibold">Detected Services:</span>
-                    <span className="text-sky-400 font-mono text-[11px]">{detectedServicesList.length} Identified</span>
+                    <span className="text-slate-500 uppercase font-semibold">Detected Services:</span>
+                    <span className="text-slate-600 font-mono text-[11px]">{detectedServicesList.length} Identified</span>
                   </div>
                   {detectedServicesList.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {detectedServicesList.map((s, idx) => (
-                        <span key={idx} className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded border border-slate-700 text-xs">
+                        <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200 text-xs">
                           {s}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <div className="p-3 bg-slate-900/60 rounded border border-slate-800 text-slate-500 italic">
+                    <div className="p-3 bg-slate-50 rounded border border-slate-200 text-slate-500 italic">
                       None detected
                     </div>
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                <div className="pt-2 border-t border-slate-100 space-y-1.5">
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400">Monitoring Ingestion:</span>
-                    <span className="text-emerald-400 font-semibold">{device.is_monitored ? 'Active Ingestion' : 'Passive'}</span>
+                    <span className="text-slate-500">Monitoring Ingestion:</span>
+                    <span className="text-emerald-700 font-semibold">{device.is_monitored ? 'Active Ingestion' : 'Passive'}</span>
                   </div>
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400">First Discovered:</span>
-                    <span className="text-slate-300">{new Date(device.first_seen).toLocaleString()}</span>
+                    <span className="text-slate-500">First Discovered:</span>
+                    <span className="text-slate-700">{new Date(device.first_seen).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400">Last Telemetry Heartbeat:</span>
-                    <span className="text-slate-300">{new Date(device.last_seen).toLocaleString()}</span>
+                    <span className="text-slate-500">Last Telemetry Heartbeat:</span>
+                    <span className="text-slate-700">{new Date(device.last_seen).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -311,31 +311,31 @@ export const DeviceDetails: React.FC = () => {
           {/* Network Interfaces Table */}
           <Card title="Physical &amp; Virtual Network Interfaces">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="text-slate-400 border-b border-[#1e293b]">
+              <table className="soc-table">
+                <thead>
                   <tr>
-                    <th className="pb-2">Interface</th>
-                    <th className="pb-2">IP Address</th>
-                    <th className="pb-2">MAC Address</th>
-                    <th className="pb-2">Primary</th>
+                    <th>Interface</th>
+                    <th>IP Address</th>
+                    <th>MAC Address</th>
+                    <th>Primary</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody>
                   {device.interfaces && device.interfaces.length > 0 ? (
                     device.interfaces.map((iface, idx) => (
                       <tr key={idx}>
-                        <td className="py-2.5 font-semibold text-slate-200">{iface.interface_name}</td>
-                        <td className="py-2.5 text-cyan-400">{iface.ip_address || device.ip_address}</td>
-                        <td className="py-2.5 text-slate-400">{iface.mac_address || device.mac_address || '—'}</td>
-                        <td className="py-2.5 text-emerald-400 font-semibold">{iface.is_primary ? 'YES' : 'NO'}</td>
+                        <td className="font-semibold text-slate-800">{iface.interface_name}</td>
+                        <td className="text-blue-600 font-semibold">{iface.ip_address || device.ip_address}</td>
+                        <td className="text-slate-500">{iface.mac_address || device.mac_address || '—'}</td>
+                        <td className="text-emerald-700 font-semibold">{iface.is_primary ? 'YES' : 'NO'}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td className="py-2.5 font-semibold text-slate-200">eth0</td>
-                      <td className="py-2.5 text-cyan-400">{device.ip_address}</td>
-                      <td className="py-2.5 text-slate-400">{device.mac_address || '—'}</td>
-                      <td className="py-2.5 text-emerald-400 font-semibold">YES</td>
+                      <td className="font-semibold text-slate-800">eth0</td>
+                      <td className="text-blue-600 font-semibold">{device.ip_address}</td>
+                      <td className="text-slate-500">{device.mac_address || '—'}</td>
+                      <td className="text-emerald-700 font-semibold">YES</td>
                     </tr>
                   )}
                 </tbody>
@@ -349,89 +349,61 @@ export const DeviceDetails: React.FC = () => {
       {activeTab === 'activity' && (
         <div className="space-y-6">
           {/* Metrics Overview Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-mono text-slate-400 uppercase">DNS Queries</div>
-                  <div className="text-2xl font-bold font-mono text-cyan-400 mt-1">
-                    {activity?.summary.total_dns_queries || 0}
-                  </div>
-                </div>
-                <div className="p-3 bg-cyan-950/60 border border-cyan-800/60 rounded-xl text-cyan-400">
-                  <Globe size={20} />
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200/90 rounded-lg p-3.5 shadow-sm">
+              <div className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">DNS Queries</div>
+              <div className="text-2xl font-bold font-mono text-blue-600 mt-1">
+                {activity?.summary.total_dns_queries || 0}
               </div>
-            </Card>
+            </div>
 
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-mono text-slate-400 uppercase">Active Flows</div>
-                  <div className="text-2xl font-bold font-mono text-emerald-400 mt-1">
-                    {activity?.summary.total_connections || 0}
-                  </div>
-                </div>
-                <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-emerald-400">
-                  <Network size={20} />
-                </div>
+            <div className="bg-white border border-slate-200/90 rounded-lg p-3.5 shadow-sm">
+              <div className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">Active Flows</div>
+              <div className="text-2xl font-bold font-mono text-emerald-600 mt-1">
+                {activity?.summary.total_connections || 0}
               </div>
-            </Card>
+            </div>
 
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-mono text-slate-400 uppercase">Security Events</div>
-                  <div className="text-2xl font-bold font-mono text-amber-400 mt-1">
-                    {activity?.summary.total_security_events || 0}
-                  </div>
-                </div>
-                <div className="p-3 bg-amber-950/60 border border-amber-800/60 rounded-xl text-amber-400">
-                  <ShieldAlert size={20} />
-                </div>
+            <div className="bg-white border border-slate-200/90 rounded-lg p-3.5 shadow-sm">
+              <div className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">Security Events</div>
+              <div className="text-2xl font-bold font-mono text-amber-600 mt-1">
+                {activity?.summary.total_security_events || 0}
               </div>
-            </Card>
+            </div>
 
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-mono text-slate-400 uppercase">Traffic In / Out</div>
-                  <div className="text-lg font-bold font-mono text-slate-200 mt-1">
-                    {((activity?.summary.bytes_uploaded || 0) / 1024).toFixed(1)} KB / {((activity?.summary.bytes_downloaded || 0) / 1024).toFixed(1)} KB
-                  </div>
-                </div>
-                <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-indigo-400">
-                  <Activity size={20} />
-                </div>
+            <div className="bg-white border border-slate-200/90 rounded-lg p-3.5 shadow-sm">
+              <div className="text-[11px] font-mono text-slate-500 uppercase tracking-wider">Traffic In / Out</div>
+              <div className="text-lg font-bold font-mono text-slate-800 mt-1">
+                {((activity?.summary.bytes_uploaded || 0) / 1024).toFixed(1)} KB / {((activity?.summary.bytes_downloaded || 0) / 1024).toFixed(1)} KB
               </div>
-            </Card>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Top Destination Domains */}
-            <Card title="Top Destination Web & API Domains">
+            <Card title="Top Destination Web &amp; API Domains">
               {!activity || activity.destination_domains.length === 0 ? (
-                <div className="py-8 text-center text-xs font-mono text-slate-500">
+                <div className="py-8 text-center text-xs font-mono text-slate-500 font-sans">
                   No outgoing domain requests logged yet for this endpoint.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead className="text-slate-400 border-b border-[#1e293b]">
+                  <table className="soc-table">
+                    <thead>
                       <tr>
-                        <th className="pb-2">Destination Domain</th>
-                        <th className="pb-2">Category</th>
-                        <th className="pb-2 text-right">Hit Count</th>
-                        <th className="pb-2 text-right">Last Accessed</th>
+                        <th>Destination Domain</th>
+                        <th>Category</th>
+                        <th className="text-right">Hit Count</th>
+                        <th className="text-right">Last Accessed</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody>
                       {activity.destination_domains.map((dom, idx) => (
-                        <tr key={idx} className="hover:bg-slate-900/60">
-                          <td className="py-2 font-bold text-cyan-300">{dom.domain}</td>
-                          <td className="py-2 text-slate-400">{dom.category || 'Web'}</td>
-                          <td className="py-2 text-right text-slate-200 font-bold">{dom.count}</td>
-                          <td className="py-2 text-right text-slate-400 text-[11px]">
+                        <tr key={idx}>
+                          <td className="font-semibold text-blue-600">{dom.domain}</td>
+                          <td className="text-slate-600">{dom.category || 'Web'}</td>
+                          <td className="text-right text-slate-800 font-semibold">{dom.count}</td>
+                          <td className="text-right text-slate-500 text-[11px]">
                             {new Date(dom.last_accessed).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </td>
                         </tr>
@@ -445,27 +417,27 @@ export const DeviceDetails: React.FC = () => {
             {/* DNS Queries Log */}
             <Card title="Live DNS Name Resolution Activity">
               {!activity || activity.dns_queries.length === 0 ? (
-                <div className="py-8 text-center text-xs font-mono text-slate-500">
+                <div className="py-8 text-center text-xs font-mono text-slate-500 font-sans">
                   No DNS resolution records for this endpoint.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead className="text-slate-400 border-b border-[#1e293b]">
+                  <table className="soc-table">
+                    <thead>
                       <tr>
-                        <th className="pb-2">Queried Name</th>
-                        <th className="pb-2">Type</th>
-                        <th className="pb-2">Resolved IP</th>
-                        <th className="pb-2 text-right">Timestamp</th>
+                        <th>Queried Name</th>
+                        <th>Type</th>
+                        <th>Resolved IP</th>
+                        <th className="text-right">Timestamp</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody>
                       {activity.dns_queries.map((dns, idx) => (
-                        <tr key={idx} className="hover:bg-slate-900/60">
-                          <td className="py-2 text-slate-200">{dns.query}</td>
-                          <td className="py-2 text-indigo-400 font-bold">{dns.record_type || 'A'}</td>
-                          <td className="py-2 text-cyan-400">{dns.resolved_ip || '—'}</td>
-                          <td className="py-2 text-right text-slate-400 text-[11px]">
+                        <tr key={idx}>
+                          <td className="text-slate-800 font-medium">{dns.query}</td>
+                          <td className="text-indigo-600 font-semibold">{dns.record_type || 'A'}</td>
+                          <td className="text-blue-600 font-semibold">{dns.resolved_ip || '—'}</td>
+                          <td className="text-right text-slate-500 text-[11px]">
                             {new Date(dns.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </td>
                         </tr>
@@ -480,43 +452,43 @@ export const DeviceDetails: React.FC = () => {
           {/* Connection Flows Table */}
           <Card title="Recent Active Network Socket Flows">
             {!activity || activity.recent_connections.length === 0 ? (
-              <div className="py-8 text-center text-xs font-mono text-slate-500">
+              <div className="py-8 text-center text-xs font-mono text-slate-500 font-sans">
                 No active socket connection telemetry reported.
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="text-slate-400 border-b border-[#1e293b]">
+                <table className="soc-table">
+                  <thead>
                     <tr>
-                      <th className="pb-2">Proto</th>
-                      <th className="pb-2">Local Port</th>
-                      <th className="pb-2">Destination</th>
-                      <th className="pb-2">Status</th>
-                      <th className="pb-2">Transfer</th>
-                      <th className="pb-2 text-right">Timestamp</th>
+                      <th>Proto</th>
+                      <th>Local Port</th>
+                      <th>Destination</th>
+                      <th>Status</th>
+                      <th>Transfer</th>
+                      <th className="text-right">Timestamp</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60">
+                  <tbody>
                     {activity.recent_connections.map((c, idx) => (
-                      <tr key={idx} className="hover:bg-slate-900/60">
-                        <td className="py-2 font-bold text-cyan-400">{c.protocol}</td>
-                        <td className="py-2 text-slate-300">{c.local_port || '—'}</td>
-                        <td className="py-2 text-slate-200">
+                      <tr key={idx}>
+                        <td className="font-semibold text-blue-600">{c.protocol}</td>
+                        <td className="text-slate-600">{c.local_port || '—'}</td>
+                        <td className="text-slate-800 font-medium">
                           {c.destination_domain ? (
                             <span>{c.destination_domain} ({c.destination_ip}:{c.destination_port})</span>
                           ) : (
                             <span>{c.destination_ip}:{c.destination_port}</span>
                           )}
                         </td>
-                        <td className="py-2">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 font-bold">
+                        <td>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold font-mono">
                             {c.status || 'ESTABLISHED'}
                           </span>
                         </td>
-                        <td className="py-2 text-slate-400 text-[11px]">
+                        <td className="text-slate-500 text-[11px]">
                           &uarr; {(c.bytes_sent / 1024).toFixed(1)}K &bull; &darr; {(c.bytes_recv / 1024).toFixed(1)}K
                         </td>
-                        <td className="py-2 text-right text-slate-400 text-[11px]">
+                        <td className="text-right text-slate-500 text-[11px]">
                           {new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </td>
                       </tr>
@@ -533,27 +505,30 @@ export const DeviceDetails: React.FC = () => {
         <div className="space-y-6">
           <Card title="Host Resource Utilization Trend" subtitle="CPU, RAM, and Storage telemetry history">
             {formattedHealth.length === 0 ? (
-              <div className="py-8 text-center text-xs font-mono text-slate-500">
+              <div className="py-8 text-center text-xs font-mono text-slate-500 font-sans">
                 No historical health agent records yet. Start the host monitoring agent to report metrics.
               </div>
             ) : (
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={formattedHealth}>
-                    <XAxis dataKey="time" stroke="#475569" fontSize={10} />
-                    <YAxis stroke="#475569" fontSize={10} domain={[0, 100]} unit="%" />
+                    <CartesianGrid stroke="#f1f5f9" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+                    <YAxis stroke="#94a3b8" fontSize={10} domain={[0, 100]} unit="%" tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#0a0d14',
-                        borderColor: '#1e293b',
-                        borderRadius: '8px',
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e2e8f0',
+                        borderRadius: '6px',
                         fontSize: '11px',
                         fontFamily: 'monospace',
+                        color: '#0f172a',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.08)',
                       }}
                     />
-                    <Line type="monotone" dataKey="cpu" name="CPU (%)" stroke="#00f0ff" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="ram" name="RAM (%)" stroke="#10b981" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="disk" name="Disk (%)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="cpu" name="CPU (%)" stroke="#2563eb" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="ram" name="RAM (%)" stroke="#059669" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="disk" name="Disk (%)" stroke="#d97706" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -565,37 +540,40 @@ export const DeviceDetails: React.FC = () => {
       {activeTab === 'alerts' && (
         <Card title={`Security Alerts Involving ${device.hostname || device.ip_address}`}>
           {alerts.length === 0 ? (
-            <div className="py-8 text-center text-xs font-mono text-emerald-400 flex items-center justify-center gap-2">
+            <div className="py-8 text-center text-xs font-mono text-emerald-700 flex items-center justify-center gap-2">
               <CheckCircle2 size={16} />
               <span>Clean Host Posture: No suspicious threat alerts recorded against this asset.</span>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="text-slate-400 border-b border-[#1e293b]">
+              <table className="soc-table">
+                <thead>
                   <tr>
-                    <th className="pb-2">Alert ID</th>
-                    <th className="pb-2">Severity</th>
-                    <th className="pb-2">Category</th>
-                    <th className="pb-2">Title</th>
-                    <th className="pb-2">Status</th>
-                    <th className="pb-2 text-right">Actions</th>
+                    <th>Alert ID</th>
+                    <th>Severity</th>
+                    <th>Category</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th className="text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody>
                   {alerts.map((a) => (
-                    <tr key={a.id} className="hover:bg-slate-900/60">
-                      <td className="py-2.5 font-semibold text-cyan-400">{a.alert_id}</td>
-                      <td className="py-2.5">
+                    <tr key={a.id}>
+                      <td className="font-semibold text-blue-600">{a.alert_id}</td>
+                      <td>
                         <Badge variant={a.severity.toLowerCase() as any}>{a.severity}</Badge>
                       </td>
-                      <td className="py-2.5 text-slate-300">{a.category}</td>
-                      <td className="py-2.5 text-slate-200">{a.title}</td>
-                      <td className="py-2.5">
-                        <Badge variant={a.status === 'NEW' ? 'cyan' : 'default'}>{a.status}</Badge>
+                      <td className="text-slate-600">{a.category}</td>
+                      <td className="text-slate-800 font-sans font-medium">{a.title}</td>
+                      <td>
+                        <Badge variant={a.status === 'NEW' ? 'primary' : 'default'}>{a.status}</Badge>
                       </td>
-                      <td className="py-2.5 text-right">
-                        <Link to={`/alerts/${a.id}`} className="text-cyan-400 hover:underline">
+                      <td className="text-right">
+                        <Link
+                          to={`/alerts/${a.id}`}
+                          className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition font-medium text-xs border border-slate-200 inline-flex items-center gap-1 active:scale-[0.99]"
+                        >
                           Triage &rarr;
                         </Link>
                       </td>

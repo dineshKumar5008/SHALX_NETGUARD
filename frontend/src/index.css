@@ -3,42 +3,67 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
   body {
-    @apply bg-[#0a0d14] text-slate-100 antialiased font-sans;
+    @apply bg-slate-50 text-slate-900 antialiased font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Ensure tabular numbers on all monospace elements for stable telemetry */
+  code, kbd, samp, pre, .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* Custom Scrollbar for SOC UI */
+/* Precision Enterprise Light Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0d14;
+  background: #f8fafc;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #94a3b8;
 }
 
-/* Glowing text and borders */
-.glow-cyan {
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
-}
-.glow-rose {
-  text-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
-}
-.glow-emerald {
-  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+/* Accessible focus ring */
+*:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
-.border-cyber {
-  border: 1px solid #1e293b;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+/* Enterprise Data Table Utilities (Light Mode) */
+.soc-table {
+  @apply w-full text-left text-xs font-mono;
 }
-.border-cyber:hover {
-  border-color: #334155;
+.soc-table thead th {
+  @apply text-slate-600 font-semibold tracking-wider text-[11px] uppercase border-b border-slate-200 pb-2.5 pt-2 px-3 bg-slate-50/90;
+}
+.soc-table tbody tr {
+  @apply border-b border-slate-100 hover:bg-slate-50/80 transition-colors duration-150;
+}
+.soc-table tbody td {
+  @apply py-2.5 px-3 text-slate-700 align-middle;
+}
+
+/* Subtle enterprise card hover animation */
+.enterprise-card-hover {
+  @apply transition-all duration-150 ease-out hover:shadow-md hover:border-slate-300;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

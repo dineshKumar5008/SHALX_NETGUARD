@@ -24,7 +24,7 @@ export const AuditLogs: React.FC = () => {
       if (userFilter) url += `user=${encodeURIComponent(userFilter)}&`;
 
       const res = await apiClient.get(url);
-      setLogs(res.data);
+      setLogs(res.data || []);
     } catch (err) {
       console.error('Failed to load audit logs:', err);
     } finally {
@@ -46,12 +46,12 @@ export const AuditLogs: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2.5">
-            <ScrollText className="w-5 h-5 text-indigo-400" />
-            <span>IMMUTABLE SYSTEM AUDIT TRAIL</span>
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <ScrollText className="w-5 h-5 text-blue-600" />
+            <span>Immutable System Audit Trail</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Cryptographically Anchored Security Actions, Firewall Block Logs & User Activity
+          <p className="text-xs text-slate-500 mt-1">
+            Cryptographically structured ledger of administrative operations, policy mutations, and access logs
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={fetchAuditLogs} icon={<RefreshCw size={13} />}>
@@ -60,15 +60,15 @@ export const AuditLogs: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-[#0f1422] p-4 rounded-xl border border-[#1e293b] flex flex-wrap gap-4 items-center justify-between">
+      <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-xs flex flex-wrap gap-3 items-center justify-between">
         <form onSubmit={handleSearch} className="flex-1 min-w-[260px] relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search audit trail by action, resource, or metadata..."
-            className="w-full bg-[#0a0d14] border border-[#1e293b] focus:border-cyan-500 rounded-lg pl-9 pr-4 py-1.5 text-xs text-slate-100 font-mono outline-none"
+            className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 rounded-lg pl-9 pr-4 py-1.5 text-xs text-slate-800 font-mono outline-none transition"
           />
         </form>
 
@@ -76,7 +76,7 @@ export const AuditLogs: React.FC = () => {
           <select
             value={userFilter}
             onChange={(e) => setUserFilter(e.target.value)}
-            className="bg-[#0a0d14] border border-[#1e293b] text-slate-200 text-xs font-mono rounded-lg px-3 py-1.5 outline-none"
+            className="bg-white border border-slate-200 text-slate-700 text-xs font-mono rounded-lg px-3 py-1.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 transition cursor-pointer shadow-xs"
           >
             <option value="">All Actors</option>
             <option value="admin">admin</option>
@@ -87,9 +87,9 @@ export const AuditLogs: React.FC = () => {
       </div>
 
       {/* Audit Log Table */}
-      <Card>
+      <Card title="Recorded Security Action Events" subtitle="Verifiable audit trail with origin IP telemetry">
         {isLoading ? (
-          <LoadingSpinner message="Querying Immutable Audit Trail..." />
+          <LoadingSpinner message="Querying immutable audit trail..." />
         ) : logs.length === 0 ? (
           <EmptyState
             title="No Audit Records Found"
@@ -97,36 +97,36 @@ export const AuditLogs: React.FC = () => {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="text-slate-400 border-b border-[#1e293b]">
+            <table className="soc-table w-full text-left text-xs font-mono">
+              <thead>
                 <tr>
-                  <th className="pb-3">Timestamp (UTC)</th>
-                  <th className="pb-3">Actor / User</th>
-                  <th className="pb-3">Security Action</th>
-                  <th className="pb-3">Target Resource</th>
-                  <th className="pb-3">Result</th>
-                  <th className="pb-3">Origin IP</th>
-                  <th className="pb-3 text-right">Details</th>
+                  <th>Timestamp (UTC)</th>
+                  <th>Actor / User</th>
+                  <th>Security Action</th>
+                  <th>Target Resource</th>
+                  <th>Result</th>
+                  <th>Origin IP</th>
+                  <th className="text-right">Payload</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100">
                 {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-900/60 transition">
-                    <td className="py-3 text-slate-400 whitespace-nowrap">
+                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 text-slate-500 whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
-                    <td className="py-3 font-semibold text-cyan-400">{log.user}</td>
-                    <td className="py-3 font-bold text-slate-200">{log.action}</td>
-                    <td className="py-3 text-slate-300 max-w-xs truncate">{log.resource}</td>
+                    <td className="py-3 font-semibold text-blue-600">{log.user}</td>
+                    <td className="py-3 font-medium text-slate-800">{log.action}</td>
+                    <td className="py-3 text-slate-600 max-w-xs truncate">{log.resource}</td>
                     <td className="py-3">
                       <Badge variant={log.result === 'SUCCESS' ? 'online' : 'critical'}>{log.result}</Badge>
                     </td>
-                    <td className="py-3 text-slate-400">{log.source_ip || '127.0.0.1'}</td>
+                    <td className="py-3 text-slate-500 font-mono">{log.source_ip || '127.0.0.1'}</td>
                     <td className="py-3 text-right">
                       {log.metadata_json && (
                         <button
                           onClick={() => setSelectedLog(log)}
-                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition"
+                          className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-sans transition border border-slate-200 shadow-xs"
                         >
                           Payload
                         </button>
@@ -146,17 +146,17 @@ export const AuditLogs: React.FC = () => {
         onClose={() => setSelectedLog(null)}
         title={
           <div className="flex items-center gap-2">
-            <Terminal size={16} className="text-cyan-400" />
-            <span>Audit Action Metadata: {selectedLog?.action}</span>
+            <Terminal size={15} className="text-blue-600" />
+            <span className="font-semibold text-slate-900">Audit Action Metadata: {selectedLog?.action}</span>
           </div>
         }
       >
         {selectedLog && (
           <div className="space-y-4 text-xs font-mono">
-            <pre className="bg-[#090d16] p-4 rounded-lg border border-[#1e293b] text-cyan-300 overflow-x-auto max-h-80">
+            <pre className="bg-slate-900 p-4 rounded-xl border border-slate-800 text-slate-100 overflow-x-auto max-h-80 shadow-inner">
               {JSON.stringify(JSON.parse(selectedLog.metadata_json || '{}'), null, 2)}
             </pre>
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-3 border-t border-slate-100">
               <Button variant="secondary" size="sm" onClick={() => setSelectedLog(null)}>
                 Close
               </Button>

@@ -23,7 +23,7 @@ export const Settings: React.FC = () => {
     setIsLoading(true);
     try {
       const res = await apiClient.get('/settings');
-      setSettingsList(res.data);
+      setSettingsList(res.data || []);
     } catch (err) {
       console.error('Error loading settings:', err);
     } finally {
@@ -65,12 +65,12 @@ export const Settings: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold font-mono text-slate-100 flex items-center gap-2.5">
-            <Sliders className="w-5 h-5 text-cyan-400" />
-            <span>GLOBAL PLATFORM CONFIGURATION & POLICIES</span>
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Sliders className="w-5 h-5 text-blue-600" />
+            <span>Global Platform Parameters & Policies</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Subnet Scopes, Threat Response Rules, and Telemetry Thresholds
+          <p className="text-xs text-slate-500 mt-1">
+            Perimeter auto-response rules, monitored CIDR scopes, and IDS log ingestion telemetry paths
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={fetchSettings} icon={<RefreshCw size={13} />}>
@@ -79,58 +79,58 @@ export const Settings: React.FC = () => {
       </div>
 
       {saveSuccess && (
-        <div className="p-3 bg-emerald-950/70 border border-emerald-800 text-xs font-mono text-emerald-300 rounded-lg flex items-center gap-2">
-          <CheckCircle2 size={15} />
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs font-mono text-emerald-800 rounded-lg flex items-center gap-2.5 shadow-xs">
+          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
           <span>{saveSuccess}</span>
         </div>
       )}
 
       {/* Settings Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card title="Threat Detection & Auto-Response Policies">
-          <div className="space-y-4 text-xs font-mono">
-            <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-slate-200">AUTO-BLOCK ON CRITICAL THREATS</span>
-                <span className="text-amber-400 font-bold">
+        <Card title="Threat Detection & Auto-Response Policies" subtitle="Automated perimeter isolation directives">
+          <div className="space-y-3.5 text-xs font-mono">
+            <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/90">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-semibold text-slate-800 uppercase text-[11px]">AUTO-BLOCK ON CRITICAL THREATS</span>
+                <span className="text-amber-600 font-bold px-2 py-0.5 bg-amber-50 rounded border border-amber-200">
                   {settingsList.find((s) => s.key === 'AUTO_BLOCK_CRITICAL_ALERTS')?.value || 'false'}
                 </span>
               </div>
-              <p className="text-slate-400 text-[11px]">
-                Enables immediate pfSense perimeter block insertion upon CRITICAL IDS rule match.
+              <p className="text-slate-500 text-xs font-sans">
+                Enables immediate pfSense perimeter drop rule insertion upon CRITICAL IDS signature match.
               </p>
             </div>
 
-            <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-slate-200">AUTO-BLOCK DURATION</span>
-                <span className="text-cyan-400 font-bold">
+            <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/90">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-semibold text-slate-800 uppercase text-[11px]">AUTO-BLOCK RETENTION DURATION</span>
+                <span className="text-blue-600 font-bold px-2 py-0.5 bg-blue-50 rounded border border-blue-200">
                   {settingsList.find((s) => s.key === 'AUTO_BLOCK_DURATION_MINUTES')?.value || '60'} mins
                 </span>
               </div>
-              <p className="text-slate-400 text-[11px]">
-                Duration before automated firewall drop rules automatically expire.
+              <p className="text-slate-500 text-xs font-sans">
+                Time-to-live before automated perimeter firewall drop entries expire from the active table.
               </p>
             </div>
           </div>
         </Card>
 
-        <Card title="Subnet Scopes & Ingestion Paths">
-          <div className="space-y-4 text-xs font-mono">
-            <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-slate-200">MONITORED CIDR SUBNETS</span>
+        <Card title="Subnet Scopes & Ingestion Paths" subtitle="Monitored network topology addresses">
+          <div className="space-y-3.5 text-xs font-mono">
+            <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/90">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-semibold text-slate-800 uppercase text-[11px]">MONITORED CIDR SUBNETS</span>
               </div>
-              <p className="text-cyan-400 text-[11px] font-semibold break-all">
+              <p className="text-blue-600 text-xs font-mono font-semibold break-all bg-white p-2 rounded-lg border border-slate-200">
                 {settingsList.find((s) => s.key === 'MONITORED_SUBNETS')?.value || '192.168.10.0/24, 192.168.20.0/24, 192.168.30.0/24'}
               </p>
             </div>
 
-            <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-slate-200">SURICATA EVE JSON LOG PATH</span>
+            <div className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/90">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-semibold text-slate-800 uppercase text-[11px]">SURICATA EVE JSON LOG PATH</span>
               </div>
-              <p className="text-slate-300 text-[11px] font-mono">
+              <p className="text-slate-700 text-xs font-mono bg-white p-2 rounded-lg border border-slate-200">
                 {settingsList.find((s) => s.key === 'SURICATA_EVE_PATH')?.value || './logs/suricata/eve.json'}
               </p>
             </div>
@@ -139,25 +139,25 @@ export const Settings: React.FC = () => {
       </div>
 
       {/* Full Parameters Table */}
-      <Card title="System Settings Registry">
+      <Card title="System Settings Registry" subtitle="Operational parameters registered in persistent storage">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead className="text-slate-400 border-b border-[#1e293b]">
+          <table className="soc-table w-full text-left text-xs font-mono">
+            <thead>
               <tr>
-                <th className="pb-3">Setting Key</th>
-                <th className="pb-3">Configured Value</th>
-                <th className="pb-3">Description</th>
-                <th className="pb-3">Last Updated By</th>
-                <th className="pb-3 text-right">Edit</th>
+                <th>Setting Key</th>
+                <th>Configured Value</th>
+                <th>Description</th>
+                <th>Last Updated By</th>
+                <th className="text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-100">
               {settingsList.map((s) => (
-                <tr key={s.key} className="hover:bg-slate-900/60 transition">
-                  <td className="py-3 font-semibold text-slate-200">{s.key}</td>
-                  <td className="py-3 font-bold text-cyan-400 max-w-xs truncate">{s.value}</td>
-                  <td className="py-3 text-slate-400">{s.description || '-'}</td>
-                  <td className="py-3 text-slate-300">{s.updated_by}</td>
+                <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 font-semibold text-slate-800">{s.key}</td>
+                  <td className="py-3 font-bold text-blue-600 max-w-xs truncate">{s.value}</td>
+                  <td className="py-3 text-slate-500 font-sans">{s.description || '-'}</td>
+                  <td className="py-3 text-slate-700">{s.updated_by}</td>
                   <td className="py-3 text-right">
                     {isAdmin && (
                       <button
@@ -165,7 +165,7 @@ export const Settings: React.FC = () => {
                           setEditingSetting(s);
                           setEditValue(s.value);
                         }}
-                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition"
+                        className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-sans transition border border-slate-200 shadow-xs"
                       >
                         Modify
                       </button>
@@ -187,7 +187,7 @@ export const Settings: React.FC = () => {
         {editingSetting && (
           <form onSubmit={handleSaveEdit} className="space-y-4 text-xs font-mono">
             <div>
-              <label className="block text-slate-300 mb-1 uppercase font-semibold">
+              <label className="block text-slate-700 mb-1.5 uppercase font-semibold text-[11px]">
                 {editingSetting.key} Value
               </label>
               <input
@@ -195,17 +195,17 @@ export const Settings: React.FC = () => {
                 required
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                className="w-full bg-[#0a0d14] border border-[#1e293b] rounded-lg p-2.5 text-slate-100 outline-none"
+                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 shadow-xs"
               />
-              <p className="text-slate-400 text-[11px] mt-1">{editingSetting.description}</p>
+              <p className="text-slate-500 text-xs font-sans mt-1.5">{editingSetting.description}</p>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200">
               <Button type="button" variant="secondary" size="sm" onClick={() => setEditingSetting(null)}>
                 Cancel
               </Button>
               <Button type="submit" variant="primary" size="sm" isLoading={isSaving}>
-                Save Value
+                Save Parameter
               </Button>
             </div>
           </form>
